@@ -386,6 +386,8 @@ def process_thailand_update(update: dict) -> dict | None:
     title = extract_title_th(text)
     source = extract_source(text)
     photos = extract_images_from_update(update, post_id=msg_id)
+    if not photos:
+        return None  # skip listings without photos
 
     # Telegram link: check text for explicit link, otherwise build from msg_id
     tg_link_m = re.search(r'https?://t\.me/\S+', text)
@@ -478,6 +480,8 @@ def build_listing_from_scraped(msg: dict) -> dict | None:
     title = extract_title_th(text)
     source = extract_source(text)
     photos = msg.get('images', [])
+    if not photos:
+        return None  # skip listings without photos
     telegram_link = f'https://t.me/{SOURCE_CHANNEL}/{post_id}'
 
     return {
