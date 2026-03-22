@@ -832,6 +832,35 @@ def _scrape_new_from_tme(existing_ids: set, data: dict) -> int:
     return new_count
 
 
+def _handle_user_commands(updates: list) -> None:
+    """Process /start and other private user commands from bot updates."""
+    try:
+        from telegram_bot import handle_start, send_message
+    except ImportError:
+        return
+
+    webapp_url_env = os.environ.get('REPLIT_DOMAINS', '')
+    webapp_url = f"https://{webapp_url_env.split(',')[0]}" if webapp_url_env else "https://goldantelope-asia.replit.app"
+
+    for upd in updates:
+        msg = upd.get('message')
+        if not msg:
+            continue
+        chat = msg.get('chat', {})
+        if chat.get('type') != 'private':
+            continue
+        text = msg.get('text', '')
+        chat_id = chat.get('id')
+        user_name = msg.get('from', {}).get('first_name', '')
+        if not chat_id:
+            continue
+        if text == '/start':
+            handle_start(chat_id, user_name)
+            logger.info(f"[bot] /start from {user_name} ({chat_id})")
+        elif text == '/help':
+            send_message(chat_id, '🦌 <b>Goldantelope ASIA</b>\n\n/start — Главное меню\n/help — Помощь\n\n📍 <a href="https://t.me/goldantelopeasia_bot">@goldantelopeasia_bot</a>')
+
+
 def run_monitoring_loop():
     from thailandparsing_parser import add_thailand_listings
     _parser_state['running'] = True
@@ -844,6 +873,9 @@ def run_monitoring_loop():
         try:
             updates, last_update_id = poll_bot_for_updates(last_update_id)
             if updates:
+                # Handle private user commands (/start etc.)
+                _handle_user_commands(updates)
+
                 data = load_listings()
                 existing_ids = get_existing_ids(data)
                 new_count = 0
