@@ -106,10 +106,10 @@ Chúng tôi tự động thu thập hàng nghìn tin đăng từ nhiều kênh T
 
     keyboard = {
         "inline_keyboard": [
-            [{"text": "🌏 Открыть каталог / Mở danh mục", "web_app": {"url": webapp_url}}],
+            [{"text": "🌏 Открыть каталог / Mở danh mục", "url": webapp_url}],
             [
-                {"text": "🇻🇳 Вьетнам", "callback_data": "country_vietnam"},
-                {"text": "🇹🇭 Таиланд", "callback_data": "country_thailand"}
+                {"text": "🇻🇳 Вьетнам", "url": f"{webapp_url}/?country=vietnam"},
+                {"text": "🇹🇭 Таиланд", "url": f"{webapp_url}/?country=thailand"}
             ]
         ]
     }
@@ -123,7 +123,7 @@ def handle_app(chat_id):
     
     keyboard = {
         "inline_keyboard": [
-            [{"text": "📱 Открыть Goldantelope ASIA", "web_app": {"url": webapp_url}}]
+            [{"text": "📱 Открыть Goldantelope ASIA", "url": webapp_url}]
         ]
     }
     
