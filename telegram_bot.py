@@ -6,6 +6,15 @@ import json
 BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 
 def get_webapp_url():
+    # 1. Explicit override (set this in Railway/production)
+    explicit = os.environ.get('WEBAPP_URL', '').strip()
+    if explicit:
+        return explicit.rstrip('/')
+    # 2. Railway auto-domain
+    railway = os.environ.get('RAILWAY_PUBLIC_DOMAIN', '').strip()
+    if railway:
+        return f"https://{railway}"
+    # 3. Replit dev domain
     domains = os.environ.get('REPLIT_DOMAINS', '')
     if domains:
         return f"https://{domains.split(',')[0]}"
