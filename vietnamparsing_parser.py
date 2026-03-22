@@ -794,10 +794,48 @@ def _group_media_updates(updates: list) -> tuple[list, list]:
     return vietnam_items, thailand_updates
 
 
+def _scrape_new_from_tme(existing_ids: set, data: dict) -> int:
+    """Scrape last 3 pages of t.me/s/vietnamparsing for new listings. Returns count added."""
+    new_count = 0
+    try:
+        all_msgs = []
+        before_id = None
+        for _ in range(3):
+            page_msgs = scrape_channel_page(before_id=before_id)
+            if not page_msgs:
+                break
+            all_msgs.extend(page_msgs)
+            before_id = min(m['post_id'] for m in page_msgs)
+            time.sleep(0.5)
+
+        if not all_msgs:
+            return 0
+
+        if 'real_estate' not in data:
+            data['real_estate'] = []
+
+        for msg in all_msgs:
+            item_id = f"vietnamparsing_{msg['post_id']}"
+            if item_id in existing_ids:
+                continue
+            item = build_listing_item(msg, item_id)
+            if item is None:
+                continue
+            data['real_estate'].insert(0, item)
+            existing_ids.add(item_id)
+            new_count += 1
+            logger.info(f"[t.me/s] New: [{item['city']}] {item['title'][:60]} | {item['price_display']}")
+    except Exception as e:
+        logger.warning(f"t.me/s scrape error: {e}")
+    return new_count
+
+
 def run_monitoring_loop():
     from thailandparsing_parser import add_thailand_listings
     _parser_state['running'] = True
     last_update_id = 0
+    scrape_counter = 0
+    SCRAPE_EVERY = 5  # Run t.me/s scrape every N bot-poll cycles (every 5 min at 60s interval)
     logger.info("Starting bot update polling loop (Vietnam + Thailand)...")
 
     while _parser_state['running']:
@@ -831,6 +869,19 @@ def run_monitoring_loop():
 
                 if thailand_updates:
                     add_thailand_listings(thailand_updates)
+
+            # Every 5 minutes: also scrape t.me/s/vietnamparsing for any missed posts
+            scrape_counter += 1
+            if scrape_counter >= SCRAPE_EVERY:
+                scrape_counter = 0
+                data = load_listings()
+                existing_ids = get_existing_ids(data)
+                n = _scrape_new_from_tme(existing_ids, data)
+                if n > 0:
+                    save_listings(data)
+                    _parser_state['new_today'] = _parser_state.get('new_today', 0) + n
+                    _parser_state['total_parsed'] = _parser_state.get('total_parsed', 0) + n
+                    logger.info(f"t.me/s scrape added {n} new VN listings")
 
             _parser_state['last_run'] = datetime.now(timezone.utc).isoformat()
         except Exception as e:
