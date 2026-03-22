@@ -609,6 +609,8 @@ def scan_new_thailand_by_id(existing_ids: set, data: dict, probe_ahead: int = 40
     max_id = 0
     for item in listings:
         tg_link = item.get('telegram_link', '')
+        if SOURCE_CHANNEL not in tg_link:
+            continue
         m = re.search(r'/(\d+)$', tg_link)
         if m:
             max_id = max(max_id, int(m.group(1)))
