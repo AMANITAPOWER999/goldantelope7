@@ -742,23 +742,22 @@ def get_city_counts(category):
     listings = [x for x in listings if not x.get('hidden', False)]
     
     if country == 'thailand':
-        city_keywords = {
-            'Пхукет': ['пхукет', 'phuket', 'patong', 'kata', 'karon', 'rawai', 'chalong', 'kamala'],
-            'Паттайя': ['паттайя', 'pattaya', 'jomtien', 'naklua', 'pratumnak'],
-            'Бангкок': ['бангкок', 'bangkok', 'sukhumvit', 'silom', 'sathorn'],
-            'Самуи': ['самуи', 'kohsamui', 'samui', 'ko samui', 'koh samui', 'chaweng', 'lamai'],
-            'Чиангмай': ['чиангмай', 'chiangmai', 'chiang mai', 'chiang_mai', 'nimman'],
-            'Хуахин': ['хуахин', 'hua hin', 'huahin'],
-            'Краби': ['краби', 'krabi', 'ao nang', 'railay'],
+        th_city_mapping = {
+            'Пхукет': 'Пхукет', 'пхукет': 'Пхукет', 'Phuket': 'Пхукет', 'phuket': 'Пхукет',
+            'Паттайя': 'Паттайя', 'паттайя': 'Паттайя', 'Pattaya': 'Паттайя', 'pattaya': 'Паттайя',
+            'Бангкок': 'Бангкок', 'бангкок': 'Бангкок', 'Bangkok': 'Бангкок', 'bangkok': 'Бангкок',
+            'Самуи': 'Самуи', 'самуи': 'Самуи', 'Samui': 'Самуи', 'samui': 'Самуи', 'Koh Samui': 'Самуи',
+            'Чиангмай': 'Чиангмай', 'чиангмай': 'Чиангмай', 'Chiang Mai': 'Чиангмай', 'chiangmai': 'Чиангмай',
+            'Хуахин': 'Хуахин', 'хуахин': 'Хуахин', 'Hua Hin': 'Хуахин', 'huahin': 'Хуахин',
+            'Краби': 'Краби', 'краби': 'Краби', 'Krabi': 'Краби', 'krabi': 'Краби',
         }
-        cities = list(city_keywords.keys())
+        cities = ['Пхукет', 'Паттайя', 'Бангкок', 'Самуи', 'Чиангмай', 'Хуахин', 'Краби']
         counts = {city: 0 for city in cities}
         for item in listings:
-            item_city = str(item.get('city', '') or item.get('location', '')).lower()
-            search_text = f"{item.get('title', '')} {item.get('description', '')} {item_city}".lower()
-            for city_name, keywords in city_keywords.items():
-                if any(kw in search_text or kw in item_city for kw in keywords):
-                    counts[city_name] += 1
+            raw_city = str(item.get('city', '') or item.get('location', '') or '').strip()
+            ru_city = th_city_mapping.get(raw_city)
+            if ru_city and ru_city in counts:
+                counts[ru_city] += 1
         return jsonify(counts)
 
     # Vietnam city mapping
