@@ -51,7 +51,7 @@ def handle_start(chat_id, user_name):
 
     text = f'''🦌 <b>Goldantelope ASIA</b>
 
-👋 Привет, {name}! / Xin chào, {name}!
+👋 Добрый день, {name}! / Xin chào buổi sáng, {name}!
 
 ━━━━━━━━━━━━━━━━━━━━
 🇷🇺 <b>Крупнейший русскоязычный агрегатор объявлений по Вьетнаму и Таиланду.</b>
