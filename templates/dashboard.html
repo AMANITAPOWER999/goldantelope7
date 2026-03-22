@@ -8110,6 +8110,9 @@
             loadListings(displayCategory);
         }
 
+        const _apiCache = new Map();
+        const _API_CACHE_TTL = 90000; // 90 секунд
+
         function loadListings(category, city = '') {
             if (!category) {
                 // Determine category from active tab or current context
@@ -8218,11 +8221,21 @@
                 params.append('show_hidden', '1');
             }
             
-            const url = `/api/listings/${category}?` + params.toString() + '&_t=' + Date.now();
-            console.log('Fetching:', url);
+            const cacheKey = `/api/listings/${category}?` + params.toString();
+            const url = cacheKey + '&_t=' + Date.now();
+            const now = Date.now();
+            const cached = !adminAuthenticated && _apiCache.get(cacheKey);
+            const useCache = cached && (now - cached.ts) < _API_CACHE_TTL;
+            console.log('Fetching:', useCache ? cacheKey + ' [CACHE]' : url);
             
-            fetch(url)
-                .then(r => r.json())
+            const dataPromise = useCache
+                ? Promise.resolve(cached.data)
+                : fetch(url).then(r => r.json()).then(data => {
+                    if (!adminAuthenticated) _apiCache.set(cacheKey, {data, ts: Date.now()});
+                    return data;
+                });
+
+            dataPromise
                 .then(data => {
                     console.log(`DEBUG: API returned ${data.length} items for ${category}`);
                     let gridId = category === 'transport' ? 'transport-grid' : category === 'real_estate' ? 'real_estate-grid' : category === 'money_exchange' ? 'exchange-grid' : category + '-grid';
