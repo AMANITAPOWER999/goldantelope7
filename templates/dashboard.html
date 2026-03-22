@@ -5952,8 +5952,8 @@
 
         function renderListingCard(item, category) {
             try {
-            let channelName = (item.source_channel || '').replace('@', '');
-            let tgLink = item.message_id && channelName ? `https://t.me/${channelName}/${item.message_id}` : null;
+            let channelName = (item.source_channel || item.contact || '').replace('@', '');
+            let tgLink = item.telegram_link || (item.message_id && channelName ? `https://t.me/${channelName}/${item.message_id}` : null);
             
             // Собираем все фото из разных полей (photos обычно полнее all_images)
             let _p = Array.isArray(item.photos) ? item.photos : [];
@@ -5965,6 +5965,10 @@
                 if (item.image_url_3) images.push(item.image_url_3);
                 if (item.image_url_4) images.push(item.image_url_4);
                 if (images.length === 0 && item.photo_url) images.push(item.photo_url);
+            }
+            // Если есть telegram_link — добавляем его как первый источник фото (свежий через /tg_img/)
+            if (tgLink && /^https:\/\/t\.me\/[^\/]+\/\d+$/.test(tgLink)) {
+                images = [tgLink, ...images.filter(u => !u.includes('t.me'))];
             }
             // Cache buster только для локальных файлов, не для Telegram CDN
             const cacheBuster = Date.now();
@@ -8292,8 +8296,8 @@
                     }
                     
                     let html = filteredData.length ? filteredData.map(item => {
-                        let channelName = (item.source_channel || '').replace('@', '');
-                        let tgLink = item.message_id && channelName ? `https://t.me/${channelName}/${item.message_id}` : null;
+                        let channelName = (item.source_channel || item.contact || '').replace('@', '');
+                        let tgLink = item.telegram_link || (item.message_id && channelName ? `https://t.me/${channelName}/${item.message_id}` : null);
                         
                         let _p2 = Array.isArray(item.photos) ? item.photos : [];
                         let _a2 = Array.isArray(item.all_images) ? item.all_images : [];
@@ -8304,6 +8308,10 @@
                             if (item.image_url_3) images.push(item.image_url_3);
                             if (item.image_url_4) images.push(item.image_url_4);
                             if (images.length === 0 && item.photo_url) images.push(item.photo_url);
+                        }
+                        // Если есть telegram_link — добавляем его как первый источник фото (свежий через /tg_img/)
+                        if (tgLink && /^https:\/\/t\.me\/[^\/]+\/\d+$/.test(tgLink)) {
+                            images = [tgLink, ...images.filter(u => !u.includes('t.me'))];
                         }
                         const cacheBuster = Date.now();
                         images = images.filter(url => url && typeof url === 'string' && url.startsWith('http'));
