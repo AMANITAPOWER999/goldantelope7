@@ -1,4 +1,5 @@
 from flask import Flask, render_template, jsonify, request, Response
+from flask_compress import Compress
 from datetime import datetime, timedelta
 import json
 import os
@@ -25,6 +26,7 @@ translation_cache = {}
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.secret_key = os.environ.get("SESSION_SECRET")
+Compress(app)
 
 online_users = {}
 ONLINE_TIMEOUT = 60
