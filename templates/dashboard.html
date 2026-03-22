@@ -5968,8 +5968,11 @@
             const cacheBuster = Date.now();
             images = images.filter(url => url && typeof url === 'string' && url.startsWith('http'));
             images = images.map(url => {
-                if (url.includes('telesco.pe') || url.includes('api.telegram.org') || url.includes('t.me')) {
-                    return url; // не добавляем cache buster для TG URLs
+                // t.me/channel/post_id → /tg_img/channel/post_id (прокси достаёт CDN URL из og:image)
+                const tmeMatch = url.match(/^https:\/\/t\.me\/([^\/]+)\/(\d+)$/);
+                if (tmeMatch) return `/tg_img/${tmeMatch[1]}/${tmeMatch[2]}`;
+                if (url.includes('telesco.pe') || url.includes('api.telegram.org')) {
+                    return url; // не добавляем cache buster для TG CDN URLs
                 }
                 return url + (url.includes('?') ? '&' : '?') + '_t=' + cacheBuster;
             });
@@ -7556,7 +7559,13 @@
                         let images = [];
                         if (item.image_url) images.push(item.image_url);
                         const cacheBuster = Date.now();
-                        images = images.map(url => url + (url.includes('?') ? '&' : '?') + '_t=' + cacheBuster);
+                        images = images.filter(url => url && typeof url === 'string' && url.startsWith('http'));
+                        images = images.map(url => {
+                            const tmeMatch = url.match(/^https:\/\/t\.me\/([^\/]+)\/(\d+)$/);
+                            if (tmeMatch) return `/tg_img/${tmeMatch[1]}/${tmeMatch[2]}`;
+                            if (url.includes('telesco.pe') || url.includes('api.telegram.org')) return url;
+                            return url + (url.includes('?') ? '&' : '?') + '_t=' + cacheBuster;
+                        });
                         const kidsType = item.kids_category || item.kids_type || '';
                         const kidsTypeLabel = kidsTypeLabels[kidsType] || '';
                         
@@ -8280,7 +8289,13 @@
                             if (images.length === 0 && item.photo_url) images.push(item.photo_url);
                         }
                         const cacheBuster = Date.now();
-                        images = images.map(url => url + (url.includes('?') ? '&' : '?') + '_t=' + cacheBuster);
+                        images = images.filter(url => url && typeof url === 'string' && url.startsWith('http'));
+                        images = images.map(url => {
+                            const tmeMatch = url.match(/^https:\/\/t\.me\/([^\/]+)\/(\d+)$/);
+                            if (tmeMatch) return `/tg_img/${tmeMatch[1]}/${tmeMatch[2]}`;
+                            if (url.includes('telesco.pe') || url.includes('api.telegram.org')) return url;
+                            return url + (url.includes('?') ? '&' : '?') + '_t=' + cacheBuster;
+                        });
                         let sliderHtml = '';
                         let badgesHtml = '';
                         let typeLabel = '';
