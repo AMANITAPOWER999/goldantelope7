@@ -870,18 +870,39 @@ def run_monitoring_loop():
                 if thailand_updates:
                     add_thailand_listings(thailand_updates)
 
-            # Every 5 minutes: also scrape t.me/s/vietnamparsing for any missed posts
+            # Every 5 minutes: scrape t.me/s/vietnamparsing + scan new Thailand posts by ID
             scrape_counter += 1
             if scrape_counter >= SCRAPE_EVERY:
                 scrape_counter = 0
+
+                # Vietnam: t.me/s/ scrape
                 data = load_listings()
                 existing_ids = get_existing_ids(data)
-                n = _scrape_new_from_tme(existing_ids, data)
-                if n > 0:
+                n_vn = _scrape_new_from_tme(existing_ids, data)
+                if n_vn > 0:
                     save_listings(data)
-                    _parser_state['new_today'] = _parser_state.get('new_today', 0) + n
-                    _parser_state['total_parsed'] = _parser_state.get('total_parsed', 0) + n
-                    logger.info(f"t.me/s scrape added {n} new VN listings")
+                    _parser_state['new_today'] = _parser_state.get('new_today', 0) + n_vn
+                    _parser_state['total_parsed'] = _parser_state.get('total_parsed', 0) + n_vn
+                    logger.info(f"t.me/s scrape added {n_vn} new VN listings")
+
+                # Thailand: scan new posts by consecutive ID probing
+                try:
+                    from thailandparsing_parser import (
+                        load_listings as th_load,
+                        save_listings as th_save,
+                        get_existing_ids as th_get_ids,
+                        scan_new_thailand_by_id,
+                    )
+                    th_data = th_load()
+                    th_ids = th_get_ids(th_data)
+                    n_th = scan_new_thailand_by_id(th_ids, th_data)
+                    if n_th > 0:
+                        th_save(th_data)
+                        _parser_state['new_today'] = _parser_state.get('new_today', 0) + n_th
+                        _parser_state['total_parsed'] = _parser_state.get('total_parsed', 0) + n_th
+                        logger.info(f"TH id-scan added {n_th} new Thailand listings")
+                except Exception as e_th:
+                    logger.warning(f"TH id-scan error: {e_th}")
 
             _parser_state['last_run'] = datetime.now(timezone.utc).isoformat()
         except Exception as e:
