@@ -518,6 +518,8 @@ def build_listing_item(msg: dict, item_id: str) -> dict | None:
     source = extract_source_from_text(text)
     telegram_link = extract_telegram_link_from_text(text)
     images = msg.get('images', [])
+    if not images:
+        return None  # skip listings without photos
 
     return {
         'id': item_id,
