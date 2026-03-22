@@ -803,14 +803,10 @@ def get_city_counts(category):
     counts = {city: 0 for city in cities}
     
     for item in listings:
-        item_city = str(item.get('city', '') or item.get('location', '')).lower()
-        search_text = f"{item.get('title', '')} {item.get('description', '')} {item_city}".lower()
-        
-        # Ищем совпадение в тексте для ВСЕХ городов (объявление может относиться к нескольким городам)
-        for city_name, keywords in city_keywords.items():
-            if any(kw in search_text or kw in item_city for kw in keywords):
-                counts[city_name] += 1
-                # НЕ используем break - считаем для всех упомянутых городов
+        raw_city = str(item.get('city', '') or item.get('location', '') or '').strip()
+        ru_city = city_name_mapping.get(raw_city)
+        if ru_city and ru_city in counts:
+            counts[ru_city] += 1
     
     return jsonify(counts)
 
