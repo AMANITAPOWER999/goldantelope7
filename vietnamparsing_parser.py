@@ -96,9 +96,7 @@ SPAM_KEYWORDS = [
 ]
 
 # Blocked sources — listings from these channels are auto-hidden
-BLOCKED_SOURCES = [
-    'gohomenhatrang',
-]
+BLOCKED_SOURCES = []
 
 
 def format_price_vnd(amount_vnd: int) -> str:
