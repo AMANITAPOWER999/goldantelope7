@@ -49,51 +49,55 @@ def handle_start(chat_id, user_name):
     webapp_url = get_webapp_url()
     name = user_name or "друг"
 
-    text = f'''👋 <b>Добро пожаловать, {name}!</b>
-<b>Chào mừng bạn đến với Goldantelope ASIA!</b>
+    text = f'''🦌 <b>Goldantelope ASIA</b>
+
+👋 Привет, {name}! / Xin chào, {name}!
 
 ━━━━━━━━━━━━━━━━━━━━
-🇷🇺 <b>GOLDANTELOPE ASIA</b> — ваш гид по Вьетнаму и Таиланду
+🇷🇺 <b>Крупнейший русскоязычный агрегатор объявлений по Вьетнаму и Таиланду.</b>
 
-Мы собрали тысячи актуальных предложений в одном месте:
+Мы автоматически собираем тысячи актуальных предложений из десятков Telegram-каналов — всё в одном удобном месте, с фото, ценами и контактами.
 
-🏠 <b>Недвижимость</b> — более 3000 объектов аренды и покупки
-   📍 Нячанг, Дананг, Хошимин, Ханой, Фукуок
-   📍 Бангкок, Пхукет, Паттайя, Самуи
+🏠 <b>Недвижимость</b> — 5 000+ объектов аренды и покупки
+   📍 Нячанг · Дананг · Хошимин · Ханой · Фукуок
+   📍 Пхукет · Бангкок · Паттайя · Самуи
 
-🍽 <b>Рестораны</b> — 350+ заведений в городах Таиланда и Вьетнама
+🍽 <b>Рестораны</b> — 650+ заведений с описанием и адресами
 
-🎯 <b>Экскурсии и развлечения</b> — лучшие туры и активности
+🛵 <b>Транспорт</b> — байки, авто, трансферы
 
-🛵 <b>Транспорт</b> — аренда байков, авто, трансферы
+🎯 <b>Экскурсии</b> — туры и активности
 
-💱 <b>Обмен валют</b> — актуальные курсы VND и THB
+💱 <b>Обмен валют</b> — курсы VND и THB
 
-🏥 <b>Медицина, визы, детям</b> — все сервисы для жизни за рубежом
+🏥 <b>Сервисы</b> — медицина, визы, детям, барахолка
 
 ━━━━━━━━━━━━━━━━━━━━
-🇻🇳 <b>GOLDANTELOPE ASIA</b> — hướng dẫn du lịch và cuộc sống tại Việt Nam & Thái Lan
+🇻🇳 <b>Nền tảng tổng hợp tin đăng lớn nhất bằng tiếng Nga về Việt Nam và Thái Lan.</b>
 
-🏠 <b>Bất động sản</b> — hơn 3000 bất động sản cho thuê và mua bán
-   📍 Nha Trang, Đà Nẵng, TP.HCM, Hà Nội, Phú Quốc
-   📍 Bangkok, Phuket, Pattaya, Koh Samui
+Chúng tôi tự động thu thập hàng nghìn tin đăng từ nhiều kênh Telegram — tất cả ở một nơi, đầy đủ ảnh, giá và liên hệ.
 
-🍽 <b>Nhà hàng</b> — 350+ địa điểm ẩm thực tại Thái Lan và Việt Nam
+🏠 <b>Bất động sản</b> — 5 000+ tin cho thuê và mua bán
+   📍 Nha Trang · Đà Nẵng · TP.HCM · Hà Nội · Phú Quốc
+   📍 Phuket · Bangkok · Pattaya · Koh Samui
 
-🎯 <b>Tour & Giải trí</b> — các tour và hoạt động tốt nhất
+🍽 <b>Nhà hàng</b> — 650+ địa điểm ẩm thực
 
-🛵 <b>Phương tiện</b> — thuê xe máy, ô tô, xe đưa đón
+🛵 <b>Phương tiện</b> — xe máy, ô tô, đưa đón
+
+🎯 <b>Tour</b> — các tour và hoạt động giải trí
 
 💱 <b>Đổi tiền</b> — tỷ giá VND và THB cập nhật
 
-🏥 <b>Y tế, thị thực, trẻ em</b> — đầy đủ dịch vụ cho cuộc sống ở nước ngoài
+🏥 <b>Dịch vụ</b> — y tế, visa, trẻ em, chợ đồ cũ
 
 ━━━━━━━━━━━━━━━━━━━━
-👇 Нажмите кнопку ниже / Nhấn nút bên dưới:'''
+👇 Нажмите кнопку, чтобы открыть каталог:
+👇 Nhấn nút để mở danh mục:'''
 
     keyboard = {
         "inline_keyboard": [
-            [{"text": "🌏 Открыть портал / Mở cổng thông tin", "web_app": {"url": webapp_url}}],
+            [{"text": "🌏 Открыть каталог / Mở danh mục", "web_app": {"url": webapp_url}}],
             [
                 {"text": "🇻🇳 Вьетнам", "callback_data": "country_vietnam"},
                 {"text": "🇹🇭 Таиланд", "callback_data": "country_thailand"}
