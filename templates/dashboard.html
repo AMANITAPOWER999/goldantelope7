@@ -1503,7 +1503,7 @@
         <div id="realestate" class="content active">
             <div id="vietnam-realestate-buttons" style="padding: 20px;">
                 <div class="tour-grid-container" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 25px; max-width: 1000px;">
-                    <div class="tour-city-btn realestate-city-btn" data-city="nhatrang" onclick="filterRealEstateByCity('nhatrang')" style="cursor: pointer; position: relative; border-radius: 12px; overflow: hidden; aspect-ratio: 4/3; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 3px solid transparent;">
+                    <div class="tour-city-btn realestate-city-btn" data-city="nhatrang" onclick="filterRealEstateByCity('nhatrang')" style="cursor: pointer; position: relative; border-radius: 12px; overflow: hidden; aspect-ratio: 4/3; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 3px solid #d4af37;">
                         <img src="/static/images/realestate_nhatrang.jpg?v=20260119" alt="Нячанг" style="width: 100%; height: 100%; object-fit: cover; min-height: 120px; background: #f0f0f0;">
                         <div class="city-info" style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,0.95); color: #333; padding: 12px; text-align: center;">
                             <div class="city-name" style="font-weight: bold; font-size: 18px;">Нячанг</div>
@@ -1517,7 +1517,7 @@
                             <div class="tour-count" id="realestate-danang-count" style="font-size: 14px; margin-top: 4px; color: #666;">0 объявлений</div>
                         </div>
                     </div>
-                    <div class="tour-city-btn realestate-city-btn" data-city="hochiminh" onclick="filterRealEstateByCity('hochiminh')" style="cursor: pointer; position: relative; border-radius: 12px; overflow: hidden; aspect-ratio: 4/3; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 3px solid #d4af37;">
+                    <div class="tour-city-btn realestate-city-btn" data-city="hochiminh" onclick="filterRealEstateByCity('hochiminh')" style="cursor: pointer; position: relative; border-radius: 12px; overflow: hidden; aspect-ratio: 4/3; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 3px solid transparent;">
                         <img src="/static/images/realestate_hochiminh.jpg?v=20260119" alt="Хошимин" style="width: 100%; height: 100%; object-fit: cover; min-height: 120px; background: #f0f0f0;">
                         <div class="city-info" style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,0.95); color: #333; padding: 12px; text-align: center;">
                             <div class="city-name" style="font-weight: bold; font-size: 18px;">Хошимин</div>
@@ -5955,8 +5955,10 @@
             let channelName = (item.source_channel || '').replace('@', '');
             let tgLink = item.message_id && channelName ? `https://t.me/${channelName}/${item.message_id}` : null;
             
-            // Собираем все фото из разных полей
-            let images = item.all_images || item.photos || [];
+            // Собираем все фото из разных полей (photos обычно полнее all_images)
+            let _p = Array.isArray(item.photos) ? item.photos : [];
+            let _a = Array.isArray(item.all_images) ? item.all_images : [];
+            let images = [...new Set([..._p, ..._a])];
             if (images.length === 0) {
                 if (item.image_url) images.push(item.image_url);
                 if (item.image_url_2) images.push(item.image_url_2);
@@ -6332,7 +6334,7 @@
             });
             
             // Reset real estate filters when switching countries
-            currentRealEstateCity = country === 'vietnam' ? 'hochiminh' : '';
+            currentRealEstateCity = country === 'vietnam' ? 'nhatrang' : '';
             currentRealEstateGroup = '';
             currentRealEstateSort = '';
             currentRealEstatePriceMax = null;
@@ -6342,10 +6344,10 @@
             document.querySelectorAll('.realestate-city-btn').forEach(btn => {
                 btn.style.border = '3px solid transparent';
             });
-            // Highlight the default hochiminh button for Vietnam
+            // Highlight the default nhatrang button for Vietnam
             if (country === 'vietnam') {
-                const hcmBtn = document.querySelector('.realestate-city-btn[data-city="hochiminh"]');
-                if (hcmBtn) hcmBtn.style.border = '3px solid #d4af37';
+                const ntrBtn = document.querySelector('.realestate-city-btn[data-city="nhatrang"]');
+                if (ntrBtn) ntrBtn.style.border = '3px solid #d4af37';
             }
             
             // Показываем кнопки городов для Вьетнама или других стран
@@ -7754,7 +7756,7 @@
                 });
         }
 
-        let currentRealEstateCity = 'hochiminh';
+        let currentRealEstateCity = 'nhatrang';
         let currentRealEstateSort = '';
         let currentRealEstateType = '';
         let currentRealEstatePriceMax = null;
@@ -8280,7 +8282,9 @@
                         let channelName = (item.source_channel || '').replace('@', '');
                         let tgLink = item.message_id && channelName ? `https://t.me/${channelName}/${item.message_id}` : null;
                         
-                        let images = item.all_images || item.photos || [];
+                        let _p2 = Array.isArray(item.photos) ? item.photos : [];
+                        let _a2 = Array.isArray(item.all_images) ? item.all_images : [];
+                        let images = [...new Set([..._p2, ..._a2])];
                         if (images.length === 0) {
                             if (item.image_url) images.push(item.image_url);
                             if (item.image_url_2) images.push(item.image_url_2);
