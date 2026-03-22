@@ -96,7 +96,7 @@ SPAM_KEYWORDS = [
 ]
 
 # Blocked sources — listings from these channels are auto-hidden
-BLOCKED_SOURCES = []
+BLOCKED_SOURCES = ['gohomenhatrang']
 
 
 def format_price_vnd(amount_vnd: int) -> str:
@@ -506,8 +506,7 @@ def build_listing_item(msg: dict, item_id: str) -> dict | None:
     text = msg.get('text', '')
     if is_spam(text):
         return None
-    if is_blocked_source(text):
-        return None  # completely skip blocked channels
+    blocked = is_blocked_source(text)
 
     price_vnd, price_display = extract_price(text)
     city = detect_city(text)
@@ -541,6 +540,7 @@ def build_listing_item(msg: dict, item_id: str) -> dict | None:
         'country': 'vietnam',
         'message_id': msg['post_id'],
         'has_media': bool(images),
+        'hidden': blocked,
     }
 
 
