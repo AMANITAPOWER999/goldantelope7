@@ -517,6 +517,11 @@ def build_listing_item(msg: dict, item_id: str) -> dict | None:
     images = msg.get('images', [])
     if not images:
         return None  # skip listings without photos
+    # Skip listings with no real description (only meta lines like Источник/Ссылка)
+    _meta_re = re.compile(r'^(источник|ссылка|link|source)\s*:', re.IGNORECASE)
+    _main_content = '\n'.join(l for l in text.split('\n') if not _meta_re.match(l.strip())).strip()
+    if len(_main_content) < 15:
+        return None  # no real description — would show "Описание недоступно"
 
     return {
         'id': item_id,
