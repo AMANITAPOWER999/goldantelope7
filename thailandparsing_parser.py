@@ -572,3 +572,97 @@ def add_thailand_listings(updates: list) -> int:
     if new_count > 0:
         save_listings(data)
     return new_count
+
+
+def _fetch_post_meta(post_id: int) -> dict | None:
+    """Fetch og:description and og:image from a single Thailand Telegram post page."""
+    import requests as req
+    url = f'https://t.me/{SOURCE_CHANNEL}/{post_id}'
+    try:
+        r = req.get(url, timeout=10, headers={'User-Agent': 'TelegramBot (like TwitterBot)'})
+        if r.status_code != 200:
+            return None
+        html = r.text
+        desc_m = re.search(r'<meta property="og:description" content="([^"]+)"', html)
+        img_m = re.search(r'<meta property="og:image" content="([^"]+)"', html)
+        if not img_m and not desc_m:
+            return None
+        text = hlib.unescape(desc_m.group(1)) if desc_m else ''
+        img = img_m.group(1) if img_m else ''
+        return {'post_id': post_id, 'text': text, 'image': img}
+    except Exception as e:
+        logger.debug(f'[TH id-scan] fetch post {post_id}: {e}')
+        return None
+
+
+def scan_new_thailand_by_id(existing_ids: set, data: dict, probe_ahead: int = 40) -> int:
+    """Probe consecutive post IDs after the current max to detect new Thailand listings.
+
+    Posts with og:description = real (main) posts; posts with only og:image = album photos.
+    Album photos are attached to the immediately preceding main post.
+    Returns count of new listings added.
+    """
+    listings = data.get('real_estate', [])
+    if not listings:
+        return 0
+
+    max_id = 0
+    for item in listings:
+        tg_link = item.get('telegram_link', '')
+        m = re.search(r'/(\d+)$', tg_link)
+        if m:
+            max_id = max(max_id, int(m.group(1)))
+    if max_id == 0:
+        return 0
+
+    logger.info(f'[TH id-scan] Max known post_id={max_id}, probing up to +{probe_ahead}')
+
+    raw_posts = []
+    consecutive_empty = 0
+    for pid in range(max_id + 1, max_id + probe_ahead + 1):
+        meta = _fetch_post_meta(pid)
+        if meta is None:
+            consecutive_empty += 1
+            if consecutive_empty >= 5:
+                break
+            time.sleep(0.3)
+            continue
+        consecutive_empty = 0
+        raw_posts.append(meta)
+        time.sleep(0.4)
+
+    if not raw_posts:
+        return 0
+
+    # Group: main post (has text) collects album photos (no text) that follow it
+    grouped = []
+    current_main = None
+    for p in raw_posts:
+        if p['text']:
+            if current_main:
+                grouped.append(current_main)
+            current_main = {'post_id': p['post_id'], 'text': p['text'],
+                            'date': datetime.now(timezone.utc).isoformat(),
+                            'images': [p['image']] if p['image'] else []}
+        else:
+            if current_main and p['image']:
+                current_main['images'].append(p['image'])
+    if current_main:
+        grouped.append(current_main)
+
+    new_count = 0
+    if 'real_estate' not in data:
+        data['real_estate'] = []
+
+    for msg in grouped:
+        item = build_listing_from_scraped(msg)
+        if item is None:
+            continue
+        if item['id'] in existing_ids:
+            continue
+        data['real_estate'].insert(0, item)
+        existing_ids.add(item['id'])
+        new_count += 1
+        logger.info(f"[TH id-scan] New: [{item['city']}] {item['title'][:60]} | {item['price_display']} | {len(msg['images'])} photo(s)")
+
+    return new_count
