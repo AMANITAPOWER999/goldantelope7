@@ -949,8 +949,8 @@ def get_listings(category):
     # Для Нячанга показываем все объявления включая скрытые
     show_hidden = request.args.get('show_hidden', '0') == '1'
     realestate_city = request.args.get('realestate_city', '')
-    if show_hidden or (category == 'real_estate' and realestate_city == 'nhatrang'):
-        filtered = listings  # Показываем все включая скрытые
+    if show_hidden:
+        filtered = listings  # Показываем все включая скрытые (только для админа)
     else:
         filtered = [x for x in listings if not x.get('hidden', False)]
     
