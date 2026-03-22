@@ -15,17 +15,6 @@ LISTINGS_FILE = 'listings_thailand.json'
 USD_TO_THB = 34
 EUR_TO_THB = 37
 
-# Title fragments that indicate spam/channel description posts — skip these
-BLOCKED_TITLE_FRAGMENTS = [
-    'все варианты из телеграмм групп',
-    'источник: @',
-    '📌 источник',
-    'подписывайтесь на наш канал',
-    'наш канал',
-    'все объявления',
-    'подпишитесь',
-]
-
 CITY_MAP = {
     'Бангкок': [
         'bangkok', 'бангкок', 'bang kok', 'bangkoc',
@@ -482,10 +471,6 @@ def build_listing_from_scraped(msg: dict) -> dict | None:
         return None
     if is_spam(text):
         return None
-    # Check for blocked title fragments (channel descriptions, spam posts)
-    preview_lower = text[:200].lower()
-    if any(frag in preview_lower for frag in BLOCKED_TITLE_FRAGMENTS):
-        return None
 
     post_id = msg['post_id']
     item_id = f'thailand_{post_id}'
@@ -675,21 +660,14 @@ def scan_new_thailand_by_id(existing_ids: set, data: dict, probe_ahead: int = 40
     if 'real_estate' not in data:
         data['real_estate'] = []
 
-    # Build title index for fast dedup
-    existing_titles = {(x.get('title') or '')[:120].lower() for x in data['real_estate']}
-
     for msg in grouped:
         item = build_listing_from_scraped(msg)
         if item is None:
             continue
         if item['id'] in existing_ids:
             continue
-        title_key = (item.get('title') or '')[:120].lower()
-        if title_key in existing_titles:
-            continue  # skip duplicate title
         data['real_estate'].insert(0, item)
         existing_ids.add(item['id'])
-        existing_titles.add(title_key)
         new_count += 1
         logger.info(f"[TH id-scan] New: [{item['city']}] {item['title'][:60]} | {item['price_display']} | {len(msg['images'])} photo(s)")
 
