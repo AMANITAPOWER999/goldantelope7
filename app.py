@@ -2836,6 +2836,42 @@ def bunny_image_proxy(image_path):
         print(f"Error fetching image: {e}")
         return Response('Error fetching image', status=500)
 
+# ============ TELEGRAM PHOTO PROXY ============
+
+# Cache: channel_postid → CDN URL or None
+_tg_photo_cache = {}
+
+@app.route('/tg_img/<channel>/<int:post_id>')
+def tg_photo_proxy(channel, post_id):
+    """Extract real CDN image URL from Telegram og:image and redirect browser to it."""
+    cache_key = f'{channel}_{post_id}'
+    
+    if cache_key in _tg_photo_cache:
+        cdn_url = _tg_photo_cache[cache_key]
+        if cdn_url:
+            return Response(status=302, headers={'Location': cdn_url, 'Cache-Control': 'public, max-age=86400'})
+        return Response(status=404)
+    
+    try:
+        headers = {
+            'User-Agent': 'TelegramBot (like TwitterBot)',
+            'Accept': 'text/html'
+        }
+        r = requests.get(f'https://t.me/{channel}/{post_id}', headers=headers, timeout=10)
+        if r.status_code == 200:
+            m = re.search(r'<meta property="og:image" content="([^"]+)"', r.text)
+            if not m:
+                m = re.search(r'<meta name="twitter:image" content="([^"]+)"', r.text)
+            if m:
+                cdn_url = m.group(1).replace('&amp;', '&')
+                _tg_photo_cache[cache_key] = cdn_url
+                return Response(status=302, headers={'Location': cdn_url, 'Cache-Control': 'public, max-age=86400'})
+    except Exception as e:
+        logger.warning(f'tg_photo_proxy error for {channel}/{post_id}: {e}')
+    
+    _tg_photo_cache[cache_key] = None
+    return Response(status=404)
+
 # ============ УПРАВЛЕНИЕ ГОРОДАМИ ============
 
 def load_cities_config(country, category):
