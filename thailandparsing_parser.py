@@ -8,6 +8,14 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
+BLOCKED_TITLE_FRAGMENTS = [
+    'все варианты из телеграмм групп',
+    'все варианты из телеграм групп',
+    '📌 источник: @',
+    'подборка объявлений',
+    'актуальные варианты аренды',
+]
+
 BOT_TOKEN = os.environ.get('VIETNAMPARSING_BOT_TOKEN', '')
 SOURCE_CHANNEL = 'thailandparsing'
 LISTINGS_FILE = 'listings_thailand.json'
@@ -661,6 +669,10 @@ def scan_new_thailand_by_id(existing_ids: set, data: dict, probe_ahead: int = 40
         data['real_estate'] = []
 
     for msg in grouped:
+        title_lower = msg.get('text', '').lower()
+        if any(frag in title_lower for frag in BLOCKED_TITLE_FRAGMENTS):
+            logger.info(f"[TH id-scan] Blocked by title: {msg.get('text','')[:60]}")
+            continue
         item = build_listing_from_scraped(msg)
         if item is None:
             continue
