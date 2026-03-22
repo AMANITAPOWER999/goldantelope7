@@ -114,7 +114,16 @@ Chúng tôi tự động thu thập hàng nghìn tin đăng từ nhiều kênh T
         ]
     }
 
-    return send_message(chat_id, text, keyboard)
+    result = send_message(chat_id, text, keyboard)
+    # Pin the welcome message so it stays at the top
+    msg_id = result.get('result', {}).get('message_id') if result.get('ok') else None
+    if msg_id:
+        requests.post(
+            f'https://api.telegram.org/bot{BOT_TOKEN}/pinChatMessage',
+            json={'chat_id': chat_id, 'message_id': msg_id, 'disable_notification': True},
+            timeout=10
+        )
+    return result
 
 def handle_app(chat_id):
     webapp_url = get_webapp_url()
