@@ -19,7 +19,7 @@ file_lock = threading.Lock()
 
 # Data cache to prevent heavy disk I/O
 data_cache = {}
-DATA_CACHE_TTL = 30 # Cache data for 30 seconds
+DATA_CACHE_TTL = 300 # Cache data for 5 minutes
 
 GOOGLE_AI_API_KEY = os.environ.get('GOOGLE_AI_API_KEY', '')
 translation_cache = {}
@@ -1358,15 +1358,21 @@ def get_listings(category):
             # Default: date_desc — newest first
             filtered.sort(key=lambda x: x.get('date', x.get('added_at', '1970-01-01')) or '1970-01-01', reverse=True)
         
-        # Обновляем URL для фото из Telegram (параллельно)
-        _refresh_photo_urls_parallel(filtered)
+        # Пагинация
+        offset = int(request.args.get('offset', 0))
+        limit = int(request.args.get('limit', 0))
+        if limit > 0:
+            filtered = filtered[offset:offset + limit]
         return jsonify(filtered)
     
     # Сортировка по дате - новые сверху
     filtered.sort(key=lambda x: x.get('date', x.get('added_at', '1970-01-01')) or '1970-01-01', reverse=True)
     
-    # Обновляем URL для фото из Telegram (параллельно для скорости)
-    _refresh_photo_urls_parallel(filtered)
+    # Пагинация
+    offset = int(request.args.get('offset', 0))
+    limit = int(request.args.get('limit', 0))
+    if limit > 0:
+        filtered = filtered[offset:offset + limit]
     
     return jsonify(filtered)
 

@@ -8117,8 +8117,10 @@
 
         const _apiCache = new Map();
         const _API_CACHE_TTL = 90000; // 90 секунд
+        const _listingOffset = {}; // category → current offset
+        const PAGE_SIZE = 50;
 
-        function loadListings(category, city = '') {
+        function loadListings(category, city = '', _loadMore = false) {
             if (!category) {
                 // Determine category from active tab or current context
                 const activeTab = document.querySelector('.tab.active');
@@ -8129,6 +8131,11 @@
                 }
             }
             if (!category) category = 'restaurants';
+
+            // Reset pagination offset when not loading more
+            if (!_loadMore) {
+                _listingOffset[category] = 0;
+            }
 
             // Map category names if needed
             let displayCategory = category;
@@ -8226,6 +8233,11 @@
                 params.append('show_hidden', '1');
             }
             
+            // Пагинация
+            const _offset = _listingOffset[category] || 0;
+            params.append('limit', PAGE_SIZE);
+            params.append('offset', _offset);
+
             const cacheKey = `/api/listings/${category}?` + params.toString();
             const url = cacheKey + '&_t=' + Date.now();
             const now = Date.now();
