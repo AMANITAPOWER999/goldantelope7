@@ -8325,10 +8325,6 @@
                             const tmeMatch = url.match(/^https:\/\/t\.me\/([^\/]+)\/(\d+)$/);
                             return tmeMatch ? `/tg_img/${tmeMatch[1]}/${tmeMatch[2]}` : null;
                         }).filter(Boolean);
-                        if (images.length === 0 && tgLink) {
-                            const _fbMatch = tgLink.match(/^https:\/\/t\.me\/([^\/]+)\/(\d+)$/);
-                            if (_fbMatch) images = [`/tg_img/${_fbMatch[1]}/${_fbMatch[2]}`];
-                        }
                         let sliderHtml = '';
                         let badgesHtml = '';
                         let typeLabel = '';
