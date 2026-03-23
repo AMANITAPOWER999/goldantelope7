@@ -5966,8 +5966,9 @@
                 if (item.image_url_4) images.push(item.image_url_4);
                 if (images.length === 0 && item.photo_url) images.push(item.photo_url);
             }
-            // Если есть telegram_link — добавляем его как первый источник фото (свежий через /tg_img/)
-            if (tgLink && /^https:\/\/t\.me\/[^\/]+\/\d+$/.test(tgLink)) {
+            // Если нет CDN-фото — добавляем telegram_link как резервный источник через /tg_img/ прокси
+            const hasCdnPhotos = images.some(u => u && u.includes('telesco.pe'));
+            if (!hasCdnPhotos && tgLink && /^https:\/\/t\.me\/[^\/]+\/\d+$/.test(tgLink)) {
                 images = [tgLink, ...images.filter(u => !u.includes('t.me'))];
             }
             // Cache buster только для локальных файлов, не для Telegram CDN
@@ -8309,8 +8310,9 @@
                             if (item.image_url_4) images.push(item.image_url_4);
                             if (images.length === 0 && item.photo_url) images.push(item.photo_url);
                         }
-                        // Если есть telegram_link — добавляем его как первый источник фото (свежий через /tg_img/)
-                        if (tgLink && /^https:\/\/t\.me\/[^\/]+\/\d+$/.test(tgLink)) {
+                        // Если нет CDN-фото — добавляем telegram_link как резервный источник через /tg_img/ прокси
+                        const hasCdnPhotos2 = images.some(u => u && u.includes('telesco.pe'));
+                        if (!hasCdnPhotos2 && tgLink && /^https:\/\/t\.me\/[^\/]+\/\d+$/.test(tgLink)) {
                             images = [tgLink, ...images.filter(u => !u.includes('t.me'))];
                         }
                         const cacheBuster = Date.now();

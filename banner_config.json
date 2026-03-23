@@ -1,9 +1,6 @@
 {
   "vietnam": {
-    "web": [
-      "/static/images/banners/vietnam_web_1769256551_Newsletter-Banner-2048-x-512-px.jpg",
-      "/static/images/banners/vietnam_web_1769256707_Copy-of-TP-Festival-Banner-private-messages-2048x512-1.png"
-    ],
+    "web": [],
     "mobile": [
       "/static/images/banners/vietnam_1769232199_ChatGPT_Image_24_._2026_._12_10_37.png",
       "/static/images/banners/vietnam_1767254417_ChatGPT_Image_1_._2026_._14_59_56.png",
