@@ -8301,13 +8301,6 @@
                     
                     console.log(`DEBUG: Rendering ${filteredData.length} items to ${gridId}`);
                     
-                    // Обновим заголовок категории с количеством
-                    const tabTitle = document.querySelector(`.tab-content[data-tab="${category}"] h2`);
-                    if (tabTitle) {
-                        const baseTitle = tabTitle.textContent.split(' (')[0];
-                        tabTitle.textContent = `${baseTitle} (${filteredData.length})`;
-                    }
-                    
                     let html = filteredData.length ? filteredData.map(item => {
                         let channelName = (item.source_channel || item.contact || '').replace('@', '');
                         let tgLink = item.telegram_link || (item.message_id && channelName ? `https://t.me/${channelName}/${item.message_id}` : null);
@@ -8798,9 +8791,50 @@
                     
                     let element = document.getElementById(gridId);
                     if (element) {
-                        element.innerHTML = html;
+                        if (_loadMore) {
+                            // Убираем старый sentinel
+                            const oldSentinel = element.querySelector('.scroll-sentinel');
+                            if (oldSentinel) oldSentinel.remove();
+                            // Добавляем новые карточки только если они есть
+                            if (filteredData.length > 0) {
+                                const tmp = document.createElement('div');
+                                tmp.innerHTML = html;
+                                while (tmp.firstChild) element.appendChild(tmp.firstChild);
+                            }
+                        } else {
+                            element.innerHTML = html;
+                        }
                         const cardCount = element.querySelectorAll('.card').length;
                         console.log(`DEBUG: DOM now has ${cardCount} cards in ${gridId}`);
+                        
+                        // Обновим заголовок с суммарным числом всех загруженных карточек
+                        const tabTitle = document.querySelector(`.tab-content[data-tab="${category}"] h2`);
+                        if (tabTitle) {
+                            const baseTitle = tabTitle.textContent.split(' (')[0];
+                            tabTitle.textContent = `${baseTitle} (${cardCount})`;
+                        }
+                        
+                        // Если вернулось PAGE_SIZE элементов — есть ещё страницы
+                        const hasMore = data.length >= PAGE_SIZE;
+                        if (hasMore) {
+                            // Добавляем sentinel для бесконечной прокрутки
+                            const sentinel = document.createElement('div');
+                            sentinel.className = 'scroll-sentinel';
+                            sentinel.style.cssText = 'height:40px;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:13px;grid-column:1/-1;';
+                            sentinel.innerHTML = '<span>⏳ Загрузка...</span>';
+                            element.appendChild(sentinel);
+                            
+                            // IntersectionObserver следит за sentinel
+                            if (window._scrollObserver) window._scrollObserver.disconnect();
+                            window._scrollObserver = new IntersectionObserver(entries => {
+                                if (entries[0].isIntersecting) {
+                                    window._scrollObserver.disconnect();
+                                    _listingOffset[category] = (_listingOffset[category] || 0) + PAGE_SIZE;
+                                    loadListings(category, city, true);
+                                }
+                            }, { rootMargin: '200px' });
+                            window._scrollObserver.observe(sentinel);
+                        }
                         
                         // Переводим карточки если выбран не русский язык
                         if (currentLang !== 'ru' && typeof translateVisibleCards === 'function') {
