@@ -358,7 +358,7 @@ def get_weather():
     try:
         response = requests.get(f'https://wttr.in/{city}?format=%t&m', timeout=5, headers={'User-Agent': 'curl/7.68.0'})
         if response.status_code == 200:
-            temp = response.text.strip().replace('+', '')
+            temp = response.content.decode('utf-8').strip().replace('+', '').replace('°', ' °')
             weather_cache[cache_key] = {'temp': temp, 'time': now}
             return jsonify({'temp': temp, 'cached': False})
     except Exception as e:
