@@ -1573,17 +1573,6 @@
                 <button onclick="filterRealEstateGroup('')" class="group-filter-btn" data-group="" style="padding: 6px 12px; background: #d4af37; border: 2px solid #d4af37; border-radius: 6px; cursor: pointer; font-weight: 500; color: #fff; font-size: 12px; height: 32px; box-sizing: border-box;">Все</button>
                 <select id="group-select" onchange="filterRealEstateGroup(this.value)" style="padding: 6px 12px; border: 2px solid #9C27B0; border-radius: 6px; font-size: 12px; font-weight: 500; color: #333; background: #fff; cursor: pointer; min-width: 150px; height: 32px; box-sizing: border-box;">
                     <option value="">-- Выбрать группу --</option>
-                    <option value="hcmc_arenda">hcmc_arenda</option>
-                    <option value="HoChiMinhRentl">HoChiMinhRentl</option>
-                    <option value="DaNangApartmentRent">DaNangApartmentRent</option>
-                    <option value="DaNangRentAFlat">DaNangRentAFlat</option>
-                    <option value="Danang_House">Danang_House</option>
-                    <option value="danag_viet_life_rent">danag_viet_life_rent</option>
-                    <option value="danang_arenda">danang_arenda</option>
-                    <option value="viet_life_niachang">viet_life_niachang</option>
-                    <option value="gohomenhatrang">gohomenhatrang</option>
-                    <option value="PhuquocRentl">PhuquocRentl</option>
-                    <option value="Hanoirentapartment">Hanoirentapartment</option>
                 </select>
             </div>
             <!-- Другие страны - динамические кнопки городов для недвижимости -->
@@ -6415,8 +6404,9 @@
             // Генерируем динамические города для других стран
             if (!isVietnam) {
                 renderDynamicCityButtons();
-                loadOtherRealEstateGroups();
             }
+            // Загружаем группы для любой страны
+            loadRealEstateGroups();
             
             // Обновляем фильтр городов для детей
             renderKidsCityFilter();
@@ -7902,8 +7892,10 @@
             loadListings('real_estate');
         }
 
-        async function loadOtherRealEstateGroups() {
-            const selectEl = document.getElementById('other-group-select');
+        async function loadRealEstateGroups() {
+            const isVietnam = currentCountry === 'vietnam';
+            const selectId = isVietnam ? 'group-select' : 'other-group-select';
+            const selectEl = document.getElementById(selectId);
             if (!selectEl) return;
             try {
                 const r = await fetch(`/api/realestate-groups?country=${currentCountry}`);
@@ -7918,6 +7910,10 @@
                 });
                 selectEl.value = currentRealEstateGroup || '';
             } catch(e) { console.error('Error loading groups:', e); }
+        }
+
+        async function loadOtherRealEstateGroups() {
+            return loadRealEstateGroups();
         }
         
         function loadExchangeCounts() {
