@@ -4,7 +4,6 @@ import requests
 import json
 
 BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
-ADMIN_CHAT_ID = 8755035125  # Уведомления о новых пользователях
 
 def get_webapp_url():
     # 1. Explicit override (set this in Railway/production)
@@ -124,14 +123,6 @@ Chúng tôi tự động thu thập hàng nghìn tin đăng từ nhiều kênh T
             json={'chat_id': chat_id, 'message_id': msg_id, 'disable_notification': True},
             timeout=10
         )
-    
-    # Уведомить администратора о новом пользователе (если это не сам админ)
-    if chat_id != ADMIN_CHAT_ID:
-        try:
-            admin_notify = f"🆕 <b>Новый пользователь</b>\n👤 {name}\n🆔 chat_id: <code>{chat_id}</code>"
-            send_message(ADMIN_CHAT_ID, admin_notify)
-        except Exception:
-            pass
     
     return result
 
