@@ -5968,7 +5968,8 @@
             }
             // Добавляем telegram_link как первый источник через /tg_img/ прокси (всегда свежий)
             if (tgLink && /^https:\/\/t\.me\/[^\/]+\/\d+$/.test(tgLink)) {
-                images = [tgLink, ...images.filter(u => !u.includes('t.me'))];
+                // Убираем только точный дубликат tgLink, остальные t.me (альбомные фото) оставляем
+                images = [tgLink, ...images.filter(u => u !== tgLink)];
             }
             // Cache buster только для локальных файлов, не для Telegram CDN
             const cacheBuster = Date.now();
@@ -8311,7 +8312,8 @@
                         }
                         // Добавляем telegram_link как первый источник через /tg_img/ прокси (всегда свежий)
                         if (tgLink && /^https:\/\/t\.me\/[^\/]+\/\d+$/.test(tgLink)) {
-                            images = [tgLink, ...images.filter(u => !u.includes('t.me'))];
+                            // Убираем только точный дубликат tgLink, остальные t.me (альбомные фото) оставляем
+                            images = [tgLink, ...images.filter(u => u !== tgLink)];
                         }
                         const cacheBuster = Date.now();
                         images = images.filter(url => url && typeof url === 'string' && url.startsWith('http'));

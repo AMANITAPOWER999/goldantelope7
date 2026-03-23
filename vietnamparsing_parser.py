@@ -678,10 +678,10 @@ def process_bot_update(update: dict, override_photos: list | None = None) -> dic
     if override_photos is not None:
         photos = override_photos
     else:
-        # Prefer permanent CDN URLs from telesco.pe viewer
+        # Scrape viewer to count photos, then store as t.me URLs (proxy keeps them fresh forever)
         cdn_photos = _scrape_cdn_photos_for_post(SOURCE_CHANNEL, msg_id)
         if cdn_photos:
-            photos = cdn_photos
+            photos = [f'https://t.me/{SOURCE_CHANNEL}/{msg_id + i}' for i in range(len(cdn_photos))]
         else:
             # Fallback: temporary Bot API URL (if post is very new and not yet visible on viewer)
             url = _extract_largest_photo_url(post)
@@ -782,12 +782,13 @@ def _group_media_updates(updates: list) -> tuple[list, list]:
         )
         main_post = grp['main'].get('channel_post') or grp['main'].get('message') or {}
         main_msg_id = main_post.get('message_id', 0)
-        # Try to get permanent CDN URLs from telesco.pe viewer
+        # Scrape viewer to count photos, store as t.me URLs (never expire via proxy)
         cdn_photos = _scrape_cdn_photos_for_post(SOURCE_CHANNEL, main_msg_id)
         if cdn_photos:
-            vietnam_items.append((grp['main'], cdn_photos))
+            tme_photos = [f'https://t.me/{SOURCE_CHANNEL}/{main_msg_id + i}' for i in range(len(cdn_photos))]
+            vietnam_items.append((grp['main'], tme_photos))
         else:
-            # Fallback to temporary Bot API URLs (will be fixed in next re-scrape pass)
+            # Fallback to temporary Bot API URLs (will be proxied on first view)
             all_photos = []
             for upd in grp['all_updates']:
                 post = upd.get('channel_post') or upd.get('message') or {}

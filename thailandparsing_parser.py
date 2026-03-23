@@ -315,11 +315,11 @@ def _scrape_cdn_photos(channel: str, post_id: int) -> list:
 
 def extract_images_from_update(update: dict, post_id: int = 0) -> list:
     post = update.get('message') or update.get('channel_post') or {}
-    # First try CDN scraping for permanent URLs
+    # Scrape to count photos, store as t.me URLs (proxy keeps fresh forever)
     if post_id:
         cdn = _scrape_cdn_photos(SOURCE_CHANNEL, post_id)
         if cdn:
-            return cdn
+            return [f'https://t.me/{SOURCE_CHANNEL}/{post_id + i}' for i in range(len(cdn))]
     # Fallback: Bot API URL (expires, but better than nothing)
     photos = []
     if post.get('photo') and BOT_TOKEN:
@@ -655,12 +655,14 @@ def scan_new_thailand_by_id(existing_ids: set, data: dict, probe_ahead: int = 40
         if p['text']:
             if current_main:
                 grouped.append(current_main)
+            # Store t.me URL instead of CDN (proxy always returns fresh CDN)
             current_main = {'post_id': p['post_id'], 'text': p['text'],
                             'date': datetime.now(timezone.utc).isoformat(),
-                            'images': [p['image']] if p['image'] else []}
+                            'images': [f'https://t.me/{SOURCE_CHANNEL}/{p["post_id"]}'] if p['image'] else []}
         else:
             if current_main and p['image']:
-                current_main['images'].append(p['image'])
+                # Album photo: store t.me URL for album post ID
+                current_main['images'].append(f'https://t.me/{SOURCE_CHANNEL}/{p["post_id"]}')
     if current_main:
         grouped.append(current_main)
 
