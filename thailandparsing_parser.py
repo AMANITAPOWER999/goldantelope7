@@ -320,25 +320,10 @@ def extract_images_from_update(update: dict, post_id: int = 0) -> list:
         cdn = _scrape_cdn_photos(SOURCE_CHANNEL, post_id)
         if cdn:
             return [f'https://t.me/{SOURCE_CHANNEL}/{post_id + i}' for i in range(len(cdn))]
-    # Fallback: Bot API URL (expires, but better than nothing)
-    photos = []
-    if post.get('photo') and BOT_TOKEN:
-        best = max(post['photo'], key=lambda p: p.get('file_size', 0))
-        file_id = best.get('file_id', '')
-        if file_id:
-            try:
-                import requests as req
-                r = req.get(
-                    f'https://api.telegram.org/bot{BOT_TOKEN}/getFile',
-                    params={'file_id': file_id}, timeout=8
-                )
-                if r.ok:
-                    path = r.json().get('result', {}).get('file_path', '')
-                    if path:
-                        photos.append(f'https://api.telegram.org/file/bot{BOT_TOKEN}/{path}')
-            except Exception:
-                pass
-    return photos
+    # Fallback: use t.me/thailandparsing/<post_id> so our proxy can resolve the photo
+    if post_id and post.get('photo'):
+        return [f'https://t.me/{SOURCE_CHANNEL}/{post_id}']
+    return []
 
 
 def load_listings() -> dict:
@@ -397,9 +382,8 @@ def process_thailand_update(update: dict) -> dict | None:
     if not photos:
         return None  # skip listings without photos
 
-    # Telegram link: check text for explicit link, otherwise build from msg_id
-    tg_link_m = re.search(r'https?://t\.me/\S+', text)
-    telegram_link = tg_link_m.group(0) if tg_link_m else (f'https://t.me/{SOURCE_CHANNEL}/{msg_id}' if msg_id else '')
+    # Telegram link: always use our channel link
+    telegram_link = f'https://t.me/{SOURCE_CHANNEL}/{msg_id}' if msg_id else ''
 
     date_ts = post.get('date', 0)
     date_str = datetime.fromtimestamp(date_ts, tz=timezone.utc).isoformat() if date_ts else datetime.now(timezone.utc).isoformat()
@@ -415,6 +399,8 @@ def process_thailand_update(update: dict) -> dict | None:
         'listing_type': listing_type,
         'contact': source,
         'telegram_link': telegram_link,
+        'message_id': msg_id,
+        'source_group': f'@{SOURCE_CHANNEL}',
         'photos': photos,
         'image_url': photos[0] if photos else '',
         'all_images': photos,
