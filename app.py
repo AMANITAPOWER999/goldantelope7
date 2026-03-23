@@ -2841,19 +2841,42 @@ def bunny_image_proxy(image_path):
 
 # ============ TELEGRAM PHOTO PROXY ============
 
-# Cache: channel_postid → CDN URL or None
-_tg_photo_cache = {}
+# Disk-persistent cache: channel_postid → {url, ts}
+_TG_PHOTO_CACHE_FILE = 'tg_photo_cache.json'
+_TG_PHOTO_CACHE_TTL = 20 * 3600  # 20 hours (CDN URLs expire in ~24h)
+_tg_photo_cache_lock = threading.Lock()
+
+def _load_tg_photo_cache():
+    if os.path.exists(_TG_PHOTO_CACHE_FILE):
+        try:
+            with open(_TG_PHOTO_CACHE_FILE, 'r') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def _save_tg_photo_cache(cache):
+    try:
+        with open(_TG_PHOTO_CACHE_FILE, 'w') as f:
+            json.dump(cache, f)
+    except Exception:
+        pass
+
+_tg_photo_cache = _load_tg_photo_cache()
 
 @app.route('/tg_img/<channel>/<int:post_id>')
 def tg_photo_proxy(channel, post_id):
     """Extract real CDN image URL from Telegram og:image and redirect browser to it."""
     cache_key = f'{channel}_{post_id}'
+    now = time.time()
     
-    if cache_key in _tg_photo_cache:
-        cdn_url = _tg_photo_cache[cache_key]
-        if cdn_url:
-            return Response(status=302, headers={'Location': cdn_url, 'Cache-Control': 'public, max-age=86400'})
-        return Response(status=404)
+    with _tg_photo_cache_lock:
+        entry = _tg_photo_cache.get(cache_key)
+        if entry and (now - entry.get('ts', 0)) < _TG_PHOTO_CACHE_TTL:
+            cdn_url = entry.get('url')
+            if cdn_url:
+                return Response(status=302, headers={'Location': cdn_url, 'Cache-Control': 'public, max-age=72000'})
+            return Response(status=404)
     
     try:
         headers = {
@@ -2867,12 +2890,16 @@ def tg_photo_proxy(channel, post_id):
                 m = re.search(r'<meta name="twitter:image" content="([^"]+)"', r.text)
             if m:
                 cdn_url = m.group(1).replace('&amp;', '&')
-                _tg_photo_cache[cache_key] = cdn_url
-                return Response(status=302, headers={'Location': cdn_url, 'Cache-Control': 'public, max-age=86400'})
+                with _tg_photo_cache_lock:
+                    _tg_photo_cache[cache_key] = {'url': cdn_url, 'ts': now}
+                    if len(_tg_photo_cache) % 10 == 0:
+                        _save_tg_photo_cache(_tg_photo_cache)
+                return Response(status=302, headers={'Location': cdn_url, 'Cache-Control': 'public, max-age=72000'})
     except Exception as e:
         logger.warning(f'tg_photo_proxy error for {channel}/{post_id}: {e}')
     
-    _tg_photo_cache[cache_key] = None
+    with _tg_photo_cache_lock:
+        _tg_photo_cache[cache_key] = {'url': None, 'ts': now}
     return Response(status=404)
 
 # ============ УПРАВЛЕНИЕ ГОРОДАМИ ============
