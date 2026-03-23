@@ -8319,12 +8319,28 @@
                         let _p2 = Array.isArray(item.photos) ? item.photos : [];
                         let _a2 = Array.isArray(item.all_images) ? item.all_images : [];
                         let images = [...new Set([..._p2, ..._a2])];
-                        images = images.filter(url => url && typeof url === 'string' &&
-                            /^https:\/\/t\.me\/(vietnamparsing|thailandparsing)\/\d+$/.test(url));
-                        images = images.map(url => {
-                            const tmeMatch = url.match(/^https:\/\/t\.me\/([^\/]+)\/(\d+)$/);
-                            return tmeMatch ? `/tg_img/${tmeMatch[1]}/${tmeMatch[2]}` : null;
-                        }).filter(Boolean);
+                        if (category === 'real_estate' || category === 'realestate') {
+                            images = images.filter(url => url && typeof url === 'string' &&
+                                /^https:\/\/t\.me\/(vietnamparsing|thailandparsing)\/\d+$/.test(url));
+                            images = images.map(url => {
+                                const tmeMatch = url.match(/^https:\/\/t\.me\/([^\/]+)\/(\d+)$/);
+                                return tmeMatch ? `/tg_img/${tmeMatch[1]}/${tmeMatch[2]}` : null;
+                            }).filter(Boolean);
+                        } else {
+                            if (images.length === 0) {
+                                if (item.image_url) images.push(item.image_url);
+                                if (item.image_url_2) images.push(item.image_url_2);
+                                if (item.image_url_3) images.push(item.image_url_3);
+                                if (item.image_url_4) images.push(item.image_url_4);
+                                if (images.length === 0 && item.photo_url) images.push(item.photo_url);
+                            }
+                            images = images.filter(url => url && typeof url === 'string' && url.startsWith('http'));
+                            images = images.map(url => {
+                                const tmeMatch = url.match(/^https:\/\/t\.me\/([^\/]+)\/(\d+)$/);
+                                if (tmeMatch) return `/tg_img/${tmeMatch[1]}/${tmeMatch[2]}`;
+                                return url;
+                            });
+                        }
                         let sliderHtml = '';
                         let badgesHtml = '';
                         let typeLabel = '';
