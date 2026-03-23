@@ -5897,6 +5897,9 @@
             if (urlCountry && ['vietnam', 'thailand', 'india', 'indonesia'].includes(urlCountry)) {
                 switchCountry(urlCountry);
             }
+
+            // Load real estate groups for the default country on page load
+            loadRealEstateGroups();
         });
         
         const countryConfig = {
