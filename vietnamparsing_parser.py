@@ -93,6 +93,9 @@ SPAM_KEYWORDS = [
     'подбор жилья бесплатно',
     'доставка цветов', 'flower delivery', 'bamboo flowers',
     'страхование', 'осаго', 'каско',
+    # Aggregator spam
+    'все варианты из телеграмм групп',
+    'хотите снять у реального собственника',
 ]
 
 # Blocked sources — listings from these channels are auto-hidden

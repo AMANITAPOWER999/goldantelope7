@@ -91,6 +91,9 @@ SPAM_KEYWORDS = [
     'мошенники пишут вам в лс',
     # Off-topic ads in real estate channels
     'доставка одноразовых',
+    # Aggregator spam
+    'все варианты из телеграмм групп',
+    'хотите снять у реального собственника',
 ]
 
 SPAM_REGEX_PATTERNS = [
