@@ -1250,37 +1250,46 @@ def get_listings(category):
                 pass
     
     elif category == 'real_estate':
-        if 'realestate_city' in filters and filters['realestate_city']:
-            city_filter = filters['realestate_city'].lower()
-            city_mapping = {
-                'nhatrang': ['nhatrang', 'nha trang', 'нячанг'],
-                'danang': ['danang', 'da nang', 'дананг'],
-                'hochiminh': ['hochiminh', 'ho chi minh', 'hcm', 'хошимин', 'сайгон'],
-                'hanoi': ['hanoi', 'ha noi', 'ханой'],
-                'phuquoc': ['phuquoc', 'phu quoc', 'фукуок'],
-                'dalat': ['dalat', 'da lat', 'далат'],
-                # Thailand cities
-                'бангкок': ['бангкок', 'bangkok'],
-                'пхукет': ['пхукет', 'phuket'],
-                'паттайя': ['паттайя', 'pattaya'],
-                'самуи': ['самуи', 'samui', 'ko samui', 'koh samui'],
-                'чиангмай': ['чиангмай', 'chiang mai', 'chiangmai'],
-                'краби': ['краби', 'krabi'],
-                'хуахин': ['хуахин', 'hua hin'],
-                'чианграй': ['чианграй', 'chiang rai'],
-                'удон тхани': ['удон тхани', 'udon thani'],
-                'тайланд': ['тайланд', 'thailand'],
-            }
-            targets = city_mapping.get(city_filter, [city_filter])
-            filtered = [x for x in filtered if any(t in str(x.get('city', '')).lower() or t in str(x.get('city_ru', '')).lower() for t in targets)]
+        group_filter = filters.get('source_group', '')
+        
+        if group_filter:
+            # Group selected — filter by group only, ignore city
+            filtered = [x for x in filtered if (
+                x.get('source_group') == group_filter or
+                x.get('channel') == group_filter or
+                x.get('contact_name') == group_filter or
+                group_filter in ' '.join(x.get('photos', [])) or
+                group_filter in (x.get('photo_url') or '')
+            )]
+        else:
+            # No group selected — apply city filter if present
+            if 'realestate_city' in filters and filters['realestate_city']:
+                city_filter = filters['realestate_city'].lower()
+                city_mapping = {
+                    'nhatrang': ['nhatrang', 'nha trang', 'нячанг'],
+                    'danang': ['danang', 'da nang', 'дананг'],
+                    'hochiminh': ['hochiminh', 'ho chi minh', 'hcm', 'хошимин', 'сайгон'],
+                    'hanoi': ['hanoi', 'ha noi', 'ханой'],
+                    'phuquoc': ['phuquoc', 'phu quoc', 'фукуок'],
+                    'dalat': ['dalat', 'da lat', 'далат'],
+                    # Thailand cities
+                    'бангкок': ['бангкок', 'bangkok'],
+                    'пхукет': ['пхукет', 'phuket'],
+                    'паттайя': ['паттайя', 'pattaya'],
+                    'самуи': ['самуи', 'samui', 'ko samui', 'koh samui'],
+                    'чиангмай': ['чиангмай', 'chiang mai', 'chiangmai'],
+                    'краби': ['краби', 'krabi'],
+                    'хуахин': ['хуахин', 'hua hin'],
+                    'чианграй': ['чианграй', 'chiang rai'],
+                    'удон тхани': ['удон тхани', 'udon thani'],
+                    'тайланд': ['тайланд', 'thailand'],
+                }
+                targets = city_mapping.get(city_filter, [city_filter])
+                filtered = [x for x in filtered if any(t in str(x.get('city', '')).lower() or t in str(x.get('city_ru', '')).lower() for t in targets)]
         
         if 'listing_type' in filters and filters['listing_type']:
             type_filter = filters['listing_type']
             filtered = [x for x in filtered if type_filter in (x.get('listing_type') or '')]
-        
-        if 'source_group' in filters and filters['source_group']:
-            group_filter = filters['source_group']
-            filtered = [x for x in filtered if x.get('source_group') == group_filter or x.get('channel') == group_filter or x.get('contact_name') == group_filter or group_filter in ' '.join(x.get('photos', [])) or group_filter in (x.get('photo_url') or '')]
         
         def get_price_int(item):
             # Сначала пробуем поле price
