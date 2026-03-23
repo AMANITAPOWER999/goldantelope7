@@ -854,15 +854,24 @@ def get_medicine_type_counts():
 
 @app.route('/api/realestate-groups')
 def get_realestate_groups():
-    """Return unique source_groups for real_estate listings of given country."""
+    """Return unique contact groups for real_estate listings of given country."""
     country = request.args.get('country', 'vietnam')
     data = load_data(country)
     listings = data.get('real_estate', [])
-    groups = sorted(set(
-        x.get('source_group') or x.get('channel') or x.get('group') or x.get('contact_name') or ''
-        for x in listings if isinstance(x, dict)
-    ) - {''})
-    return jsonify(groups)
+    groups = set()
+    for x in listings:
+        if not isinstance(x, dict):
+            continue
+        # Primary: use contact field (e.g. @nedvizimost_nhatrang)
+        contact = x.get('contact') or ''
+        if contact and contact.startswith('@'):
+            groups.add(contact)
+        # Fallback: source_group / channel / group / contact_name
+        else:
+            g = x.get('source_group') or x.get('channel') or x.get('group') or x.get('contact_name') or ''
+            if g:
+                groups.add(g)
+    return jsonify(sorted(groups))
 
 
 @app.route('/api/kids-type-counts')
@@ -1255,9 +1264,11 @@ def get_listings(category):
         if group_filter:
             # Group selected — filter by group only, ignore city
             filtered = [x for x in filtered if (
+                x.get('contact') == group_filter or
                 x.get('source_group') == group_filter or
                 x.get('channel') == group_filter or
                 x.get('contact_name') == group_filter or
+                x.get('group') == group_filter or
                 group_filter in ' '.join(x.get('photos', [])) or
                 group_filter in (x.get('photo_url') or '')
             )]
