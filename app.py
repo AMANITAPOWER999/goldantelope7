@@ -4245,6 +4245,35 @@ def _ensure_parser_started():
 _ensure_parser_started()
 
 
+def _auto_setup_webhook():
+    """Автоматически устанавливает webhook бота при запуске приложения."""
+    import time as _time
+    _time.sleep(5)  # Ждём пока приложение полностью стартует
+    try:
+        bot_token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+        if not bot_token:
+            return
+        domains = os.environ.get('REPLIT_DOMAINS', '') or os.environ.get('REPLIT_DEV_DOMAIN', '')
+        if not domains:
+            return
+        domain = domains.split(',')[0]
+        webhook_url = f'https://{domain}/bot/webhook'
+        r = requests.post(
+            f'https://api.telegram.org/bot{bot_token}/setWebhook',
+            json={'url': webhook_url, 'allowed_updates': ['message', 'callback_query']},
+            timeout=10
+        )
+        result = r.json()
+        if result.get('ok'):
+            logger.info(f'Bot webhook auto-configured: {webhook_url}')
+        else:
+            logger.warning(f'Bot webhook setup failed: {result}')
+    except Exception as e:
+        logger.warning(f'Bot webhook auto-setup error: {e}')
+
+threading.Thread(target=_auto_setup_webhook, daemon=True, name='WebhookSetup').start()
+
+
 if __name__ == '__main__':
     import threading
     t = threading.Thread(target=run_bot, daemon=True)
