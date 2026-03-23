@@ -1342,11 +1342,13 @@ def get_listings(category):
                     try:
                         val = float(price_str)
                         # Если число маленькое и паттерн с млн/миллион
-                        if val < 1000 and 'млн' in pattern or 'миллион' in pattern:
+                        if val < 1000 and ('млн' in pattern or 'миллион' in pattern):
                             val = val * 1000000
                         elif val < 100:
                             val = val * 1000000
-                        return int(val)
+                        # Minimum reasonable RE price: 1,000,000 VND (~$40)
+                        if val >= 1000000:
+                            return int(val)
                     except:
                         pass
             
