@@ -5892,9 +5892,21 @@
         }
         
         document.addEventListener('DOMContentLoaded', function() {
-            const savedLang = localStorage.getItem('goldantelope_lang');
-            if (savedLang && ['ru', 'en', 'vi', 'th'].includes(savedLang)) {
-                switchLang(savedLang);
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlLang = urlParams.get('lang');
+            const urlCountry = urlParams.get('country');
+
+            if (urlLang && ['ru', 'en', 'vi', 'th'].includes(urlLang)) {
+                switchLang(urlLang);
+            } else {
+                const savedLang = localStorage.getItem('goldantelope_lang');
+                if (savedLang && ['ru', 'en', 'vi', 'th'].includes(savedLang)) {
+                    switchLang(savedLang);
+                }
+            }
+
+            if (urlCountry && ['vietnam', 'thailand', 'india', 'indonesia'].includes(urlCountry)) {
+                switchCountry(urlCountry);
             }
         });
         

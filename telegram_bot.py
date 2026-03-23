@@ -101,15 +101,18 @@ Chúng tôi tự động thu thập hàng nghìn tin đăng từ nhiều kênh T
 🏥 <b>Dịch vụ</b> — y tế, visa, trẻ em, chợ đồ cũ
 
 ━━━━━━━━━━━━━━━━━━━━
-👇 Нажмите кнопку, чтобы открыть каталог:
-👇 Nhấn nút để mở danh mục:'''
+👇 Выберите страну / Choose your country / Chọn quốc gia:'''
 
     keyboard = {
         "inline_keyboard": [
-            [{"text": "🌏 Открыть каталог / Mở danh mục", "url": webapp_url}],
+            [{"text": "🌏 Open catalog / Открыть каталог", "url": webapp_url}],
             [
-                {"text": "🇻🇳 Вьетнам", "url": f"{webapp_url}/?country=vietnam"},
-                {"text": "🇹🇭 Таиланд", "url": f"{webapp_url}/?country=thailand"}
+                {"text": "🇻🇳 Vietnam", "url": f"{webapp_url}/?country=vietnam&lang=vi"},
+                {"text": "🇹🇭 Thailand", "url": f"{webapp_url}/?country=thailand&lang=ru"}
+            ],
+            [
+                {"text": "🇷🇺 Russia", "url": f"{webapp_url}/?lang=ru"},
+                {"text": "🇬🇧 England", "url": f"{webapp_url}/?lang=en"}
             ]
         ]
     }
