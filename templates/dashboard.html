@@ -5959,34 +5959,16 @@
             let channelName = (item.source_channel || item.contact || '').replace('@', '');
             let tgLink = item.telegram_link || (item.message_id && channelName ? `https://t.me/${channelName}/${item.message_id}` : null);
             
-            // Собираем все фото из разных полей (photos обычно полнее all_images)
+            // Только t.me ссылки наших каналов vietnamparsing / thailandparsing
             let _p = Array.isArray(item.photos) ? item.photos : [];
             let _a = Array.isArray(item.all_images) ? item.all_images : [];
             let images = [...new Set([..._p, ..._a])];
-            if (images.length === 0) {
-                if (item.image_url) images.push(item.image_url);
-                if (item.image_url_2) images.push(item.image_url_2);
-                if (item.image_url_3) images.push(item.image_url_3);
-                if (item.image_url_4) images.push(item.image_url_4);
-                if (images.length === 0 && item.photo_url) images.push(item.photo_url);
-            }
-            // Добавляем telegram_link как первый источник через /tg_img/ прокси (всегда свежий)
-            if (tgLink && /^https:\/\/t\.me\/[^\/]+\/\d+$/.test(tgLink)) {
-                // Убираем только точный дубликат tgLink, остальные t.me (альбомные фото) оставляем
-                images = [tgLink, ...images.filter(u => u !== tgLink)];
-            }
-            // Cache buster только для локальных файлов, не для Telegram CDN
-            const cacheBuster = Date.now();
-            images = images.filter(url => url && typeof url === 'string' && url.startsWith('http'));
+            images = images.filter(url => url && typeof url === 'string' &&
+                /^https:\/\/t\.me\/(vietnamparsing|thailandparsing)\/\d+$/.test(url));
             images = images.map(url => {
-                // t.me/channel/post_id → /tg_img/channel/post_id (прокси достаёт CDN URL из og:image)
                 const tmeMatch = url.match(/^https:\/\/t\.me\/([^\/]+)\/(\d+)$/);
-                if (tmeMatch) return `/tg_img/${tmeMatch[1]}/${tmeMatch[2]}`;
-                if (url.includes('telesco.pe') || url.includes('api.telegram.org')) {
-                    return url; // не добавляем cache buster для TG CDN URLs
-                }
-                return url + (url.includes('?') ? '&' : '?') + '_t=' + cacheBuster;
-            });
+                return tmeMatch ? `/tg_img/${tmeMatch[1]}/${tmeMatch[2]}` : null;
+            }).filter(Boolean);
             
             let badgesHtml = '';
             if (category === 'visas') {
@@ -8319,26 +8301,12 @@
                         let _p2 = Array.isArray(item.photos) ? item.photos : [];
                         let _a2 = Array.isArray(item.all_images) ? item.all_images : [];
                         let images = [...new Set([..._p2, ..._a2])];
-                        if (images.length === 0) {
-                            if (item.image_url) images.push(item.image_url);
-                            if (item.image_url_2) images.push(item.image_url_2);
-                            if (item.image_url_3) images.push(item.image_url_3);
-                            if (item.image_url_4) images.push(item.image_url_4);
-                            if (images.length === 0 && item.photo_url) images.push(item.photo_url);
-                        }
-                        // Добавляем telegram_link как первый источник через /tg_img/ прокси (всегда свежий)
-                        if (tgLink && /^https:\/\/t\.me\/[^\/]+\/\d+$/.test(tgLink)) {
-                            // Убираем только точный дубликат tgLink, остальные t.me (альбомные фото) оставляем
-                            images = [tgLink, ...images.filter(u => u !== tgLink)];
-                        }
-                        const cacheBuster = Date.now();
-                        images = images.filter(url => url && typeof url === 'string' && url.startsWith('http'));
+                        images = images.filter(url => url && typeof url === 'string' &&
+                            /^https:\/\/t\.me\/(vietnamparsing|thailandparsing)\/\d+$/.test(url));
                         images = images.map(url => {
                             const tmeMatch = url.match(/^https:\/\/t\.me\/([^\/]+)\/(\d+)$/);
-                            if (tmeMatch) return `/tg_img/${tmeMatch[1]}/${tmeMatch[2]}`;
-                            if (url.includes('telesco.pe') || url.includes('api.telegram.org')) return url;
-                            return url + (url.includes('?') ? '&' : '?') + '_t=' + cacheBuster;
-                        });
+                            return tmeMatch ? `/tg_img/${tmeMatch[1]}/${tmeMatch[2]}` : null;
+                        }).filter(Boolean);
                         let sliderHtml = '';
                         let badgesHtml = '';
                         let typeLabel = '';
