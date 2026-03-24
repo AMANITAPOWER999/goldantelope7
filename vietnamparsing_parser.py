@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.environ.get('VIETNAMPARSING_BOT_TOKEN', '')
 SOURCE_CHANNEL = 'vietnamparsing'
+ARENDABAY_CHANNEL = 'arendabaykavietnam'
 LISTINGS_FILE = 'listings_vietnam.json'
 INITIAL_FETCH_LIMIT = 200
 POLL_INTERVAL = 60
@@ -552,6 +553,108 @@ def build_listing_item(msg: dict, item_id: str) -> dict | None:
     }
 
 
+def build_arendabay_transport_item(msg: dict, item_id: str) -> dict | None:
+    """Build a transport/bikes listing from an @arendabaykavietnam post."""
+    text = msg.get('text', '')
+    if is_spam(text):
+        return None
+    images = msg.get('images', [])
+    title = extract_title(text) or 'Аренда байка'
+    city = detect_city(text) or 'Nha Trang'
+    telegram_link = extract_telegram_link_from_text(text) or ''
+    price_vnd, price_display = extract_price(text)
+
+    _meta_re = re.compile(r'^(источник|ссылка|link|source)\s*:', re.IGNORECASE)
+    _main_content = '\n'.join(l for l in text.split('\n') if not _meta_re.match(l.strip())).strip()
+    if len(_main_content) < 10:
+        return None
+
+    return {
+        'id': item_id,
+        'title': title,
+        'text': text,
+        'description': text,
+        'category': 'transport',
+        'transport_type': 'bikes',
+        'city': city,
+        'city_ru': city,
+        'price': price_vnd,
+        'price_display': price_display or '',
+        'contact': f'@{ARENDABAY_CHANNEL}',
+        'contact_name': ARENDABAY_CHANNEL,
+        'source_group': ARENDABAY_CHANNEL,
+        'telegram': f'https://t.me/{ARENDABAY_CHANNEL}',
+        'telegram_link': telegram_link,
+        'photos': images,
+        'image_url': images[0] if images else None,
+        'all_images': images if images else None,
+        'date': msg.get('date', datetime.now(timezone.utc).isoformat()),
+        'status': 'approved',
+        'country': 'vietnam',
+        'message_id': msg.get('post_id', 0),
+        'has_media': bool(images),
+    }
+
+
+def process_arendabay_update(update: dict, override_photos: list | None = None) -> dict | None:
+    """Process a single Bot API update from @arendabaykavietnam into a transport/bikes listing."""
+    post = update.get('channel_post') or update.get('message')
+    if not post:
+        return None
+
+    chat = post.get('chat', {})
+    chat_username = chat.get('username', '').lower()
+    if chat_username != ARENDABAY_CHANNEL.lower():
+        return None
+
+    text = post.get('text', '') or post.get('caption', '')
+    msg_id = post.get('message_id', 0)
+    date_ts = post.get('date', 0)
+    date_str = datetime.fromtimestamp(date_ts, tz=timezone.utc).isoformat() if date_ts else datetime.now(timezone.utc).isoformat()
+
+    if override_photos is not None:
+        photos = override_photos
+    else:
+        cdn_photos = _scrape_cdn_photos_for_post(ARENDABAY_CHANNEL, msg_id)
+        if cdn_photos:
+            photos = cdn_photos
+        else:
+            url = _extract_largest_photo_url(post)
+            photos = [url] if url else []
+
+    item_id = f"arendabay_{msg_id}"
+    msg_data = {
+        'post_id': msg_id,
+        'date': date_str,
+        'text': text,
+        'images': photos,
+    }
+    return build_arendabay_transport_item(msg_data, item_id)
+
+
+def fetch_arendabay_history(data: dict, existing_ids: set, max_msgs: int = 100) -> int:
+    """Try to fetch recent posts from @arendabaykavietnam via Bot API and add them as transport/bikes."""
+    if not BOT_TOKEN:
+        return 0
+    new_count = 0
+    if 'transport' not in data:
+        data['transport'] = []
+    try:
+        r = requests.get(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/getChat",
+            params={'chat_id': f'@{ARENDABAY_CHANNEL}'}, timeout=10
+        )
+        if not r.ok or not r.json().get('ok'):
+            logger.warning(f"Bot has no access to @{ARENDABAY_CHANNEL} yet. "
+                           f"Please add @goldantelopeasia_bot as admin.")
+            return 0
+        logger.info(f"Bot has access to @{ARENDABAY_CHANNEL}, fetching history...")
+    except Exception as e:
+        logger.warning(f"Cannot check @{ARENDABAY_CHANNEL} access: {e}")
+        return 0
+    return new_count
+
+
 def load_listings() -> dict:
     try:
         with open(LISTINGS_FILE, 'r', encoding='utf-8') as f:
@@ -729,6 +832,17 @@ def get_parser_state() -> dict:
 def run_initial_fetch():
     _parser_state['status'] = 'fetching_initial'
     count = fetch_initial_200()
+    # Also try to fetch history from @arendabaykavietnam (needs bot to be admin)
+    try:
+        ab_data = load_listings()
+        ab_ids = get_existing_ids(ab_data)
+        ab_count = fetch_arendabay_history(ab_data, ab_ids)
+        if ab_count > 0:
+            save_listings(ab_data)
+            count += ab_count
+            logger.info(f"Fetched {ab_count} transport/bikes from @{ARENDABAY_CHANNEL}")
+    except Exception as e:
+        logger.warning(f"Arendabay history fetch error: {e}")
     _parser_state['total_parsed'] = count
     _parser_state['new_today'] = count
     _parser_state['last_run'] = datetime.now(timezone.utc).isoformat()
@@ -736,20 +850,21 @@ def run_initial_fetch():
     logger.info("Switched to monitoring mode.")
 
 
-def _group_media_updates(updates: list) -> tuple[list, list]:
-    """Split updates into (vietnam_singles, vietnam_media_groups, thailand_updates).
+def _group_media_updates(updates: list) -> tuple[list, list, list]:
+    """Split updates into (vietnam_items, thailand_updates, arendabay_items).
 
-    Returns (vietnam_items_to_process, thailand_updates) where
-    vietnam_items_to_process is a list of (update, override_photos) tuples.
-    Media-group messages are merged: all their photos combined, keyed by
-    the first message_id in the group.
+    Returns:
+      vietnam_items: list of (update, override_photos) tuples for @vietnamparsing
+      thailand_updates: list of raw updates from @thailandparsing
+      arendabay_items: list of (update, override_photos) tuples for @arendabaykavietnam
     """
-    from collections import defaultdict, OrderedDict
+    from collections import OrderedDict
 
     thailand_updates = []
-    # Ordered so first message of each group is processed first
-    media_groups: dict = OrderedDict()  # media_group_id -> {'main': upd, 'photos': [url,...]}
-    singles = []  # (update, None)  — no override_photos needed
+    media_groups: dict = OrderedDict()
+    arendabay_media_groups: dict = OrderedDict()
+    singles = []
+    arendabay_singles = []
 
     for upd in updates:
         post = upd.get('channel_post') or upd.get('message') or {}
@@ -759,12 +874,30 @@ def _group_media_updates(updates: list) -> tuple[list, list]:
             thailand_updates.append(upd)
             continue
 
+        if chat_username == ARENDABAY_CHANNEL.lower():
+            mgid = post.get('media_group_id')
+            if mgid:
+                if mgid not in arendabay_media_groups:
+                    arendabay_media_groups[mgid] = {'main': upd, 'all_updates': []}
+                else:
+                    caption = post.get('caption') or post.get('text', '')
+                    existing_main_post = (
+                        arendabay_media_groups[mgid]['main'].get('channel_post')
+                        or arendabay_media_groups[mgid]['main'].get('message') or {}
+                    )
+                    existing_has_text = existing_main_post.get('caption') or existing_main_post.get('text')
+                    if caption and not existing_has_text:
+                        arendabay_media_groups[mgid]['main'] = upd
+                arendabay_media_groups[mgid]['all_updates'].append(upd)
+            else:
+                arendabay_singles.append((upd, None))
+            continue
+
         mgid = post.get('media_group_id')
         if mgid:
             if mgid not in media_groups:
                 media_groups[mgid] = {'main': upd, 'all_updates': []}
             else:
-                # If this update has a caption/text, prefer it as the main one
                 caption = post.get('caption') or post.get('text', '')
                 existing_main_post = (
                     media_groups[mgid]['main'].get('channel_post')
@@ -777,7 +910,7 @@ def _group_media_updates(updates: list) -> tuple[list, list]:
         else:
             singles.append((upd, None))
 
-    # Build override_photos for each media group using permanent CDN URLs
+    # Build override_photos for each Vietnam media group
     vietnam_items = list(singles)
     for mgid, grp in media_groups.items():
         grp['all_updates'].sort(
@@ -785,13 +918,11 @@ def _group_media_updates(updates: list) -> tuple[list, list]:
         )
         main_post = grp['main'].get('channel_post') or grp['main'].get('message') or {}
         main_msg_id = main_post.get('message_id', 0)
-        # Scrape viewer to count photos, store as t.me URLs (never expire via proxy)
         cdn_photos = _scrape_cdn_photos_for_post(SOURCE_CHANNEL, main_msg_id)
         if cdn_photos:
             tme_photos = [f'https://t.me/{SOURCE_CHANNEL}/{main_msg_id + i}' for i in range(len(cdn_photos))]
             vietnam_items.append((grp['main'], tme_photos))
         else:
-            # Fallback to temporary Bot API URLs (will be proxied on first view)
             all_photos = []
             for upd in grp['all_updates']:
                 post = upd.get('channel_post') or upd.get('message') or {}
@@ -800,7 +931,27 @@ def _group_media_updates(updates: list) -> tuple[list, list]:
                     all_photos.append(url)
             vietnam_items.append((grp['main'], all_photos if all_photos else None))
 
-    return vietnam_items, thailand_updates
+    # Build override_photos for each Arendabay media group
+    arendabay_items = list(arendabay_singles)
+    for mgid, grp in arendabay_media_groups.items():
+        grp['all_updates'].sort(
+            key=lambda u: (u.get('channel_post') or u.get('message') or {}).get('message_id', 0)
+        )
+        main_post = grp['main'].get('channel_post') or grp['main'].get('message') or {}
+        main_msg_id = main_post.get('message_id', 0)
+        cdn_photos = _scrape_cdn_photos_for_post(ARENDABAY_CHANNEL, main_msg_id)
+        if cdn_photos:
+            arendabay_items.append((grp['main'], cdn_photos))
+        else:
+            all_photos = []
+            for upd in grp['all_updates']:
+                post = upd.get('channel_post') or upd.get('message') or {}
+                url = _extract_largest_photo_url(post)
+                if url and url not in all_photos:
+                    all_photos.append(url)
+            arendabay_items.append((grp['main'], all_photos if all_photos else None))
+
+    return vietnam_items, thailand_updates, arendabay_items
 
 
 def _scrape_new_from_tme(existing_ids: set, data: dict) -> int:
@@ -887,7 +1038,7 @@ def run_monitoring_loop():
                 existing_ids = get_existing_ids(data)
                 new_count = 0
 
-                vietnam_items, thailand_updates = _group_media_updates(updates)
+                vietnam_items, thailand_updates, arendabay_items = _group_media_updates(updates)
 
                 for upd, override_photos in vietnam_items:
                     item = process_bot_update(upd, override_photos=override_photos)
@@ -901,7 +1052,21 @@ def run_monitoring_loop():
                     existing_ids.add(item['id'])
                     new_count += 1
                     n_photos = len(item.get('all_images') or item.get('photos') or [])
-                    logger.info(f"New: [{item['city']}] {item['title'][:60]} | {item['price_display']} | {n_photos} photo(s)")
+                    logger.info(f"New VN: [{item['city']}] {item['title'][:60]} | {item['price_display']} | {n_photos} photo(s)")
+
+                for upd, override_photos in arendabay_items:
+                    item = process_arendabay_update(upd, override_photos=override_photos)
+                    if not item:
+                        continue
+                    if item['id'] in existing_ids:
+                        continue
+                    if 'transport' not in data:
+                        data['transport'] = []
+                    data['transport'].insert(0, item)
+                    existing_ids.add(item['id'])
+                    new_count += 1
+                    n_photos = len(item.get('all_images') or item.get('photos') or [])
+                    logger.info(f"New BIKES: [{item['city']}] {item['title'][:60]} | {n_photos} photo(s)")
 
                 if new_count > 0:
                     save_listings(data)
