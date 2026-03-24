@@ -6025,7 +6025,7 @@
                     ${badgesHtml}
                     ${adminBtnsHtml}
                     <div class="slides" style="display:flex;transition:transform 0.3s;height:100%;">
-                        ${images.map((img, i) => `<img src="${i === 0 ? img : 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'}" data-src="${img}" style="min-width:100%;height:180px;object-fit:cover;" ${i === 0 ? `onerror="this.onerror=null;this.style.display='none'"` : ''}>`).join('')}
+                        ${images.map((img, i) => `<img src="${i === 0 ? img : 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'}" data-src="${img}" style="min-width:100%;height:180px;object-fit:cover;" loading="${i === 0 ? 'eager' : 'lazy'}" ${i === 0 ? `onerror="this.onerror=null;this.style.display='none'"` : ''}>`).join('')}
                     </div>
                     <button class="slide-btn prev" onclick="event.stopPropagation();slideCard(this,-1)" style="position:absolute;left:5px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.5);color:white;border:none;width:28px;height:28px;border-radius:50%;cursor:pointer;">‹</button>
                     <button class="slide-btn next" onclick="event.stopPropagation();slideCard(this,1)" style="position:absolute;right:5px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.5);color:white;border:none;width:28px;height:28px;border-radius:50%;cursor:pointer;">›</button>
