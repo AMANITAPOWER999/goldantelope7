@@ -4808,10 +4808,23 @@ def internal_git_push():
     with open(netrc_path, 'w') as f:
         f.write(f'machine github.com login x-access-token password {token}\n')
     os.chmod(netrc_path, stat.S_IRUSR | stat.S_IWUSR)
-    env = dict(os.environ, GIT_TERMINAL_PROMPT='0',
-               HOME=tmpdir,
-               GIT_AUTHOR_NAME='GoldAntelope Bot', GIT_AUTHOR_EMAIL='bot@goldantelope.app',
-               GIT_COMMITTER_NAME='GoldAntelope Bot', GIT_COMMITTER_EMAIL='bot@goldantelope.app')
+    # Write askpass script that returns the token as password
+    askpass_path = os.path.join(tmpdir, 'askpass.sh')
+    with open(askpass_path, 'w') as f:
+        f.write(f'#!/bin/sh\ncase "$1" in\n  *[Pp]assword*) echo \'{token}\' ;;\n  *) echo \'x-access-token\' ;;\nesac\n')
+    os.chmod(askpass_path, stat.S_IRWXU)
+    env = dict(os.environ)
+    env['GIT_TERMINAL_PROMPT'] = '0'
+    env['HOME'] = tmpdir
+    env['GIT_ASKPASS'] = askpass_path
+    env['SSH_ASKPASS'] = askpass_path
+    env['GIT_AUTHOR_NAME'] = 'GoldAntelope Bot'
+    env['GIT_AUTHOR_EMAIL'] = 'bot@goldantelope.app'
+    env['GIT_COMMITTER_NAME'] = 'GoldAntelope Bot'
+    env['GIT_COMMITTER_EMAIL'] = 'bot@goldantelope.app'
+    # Remove Replit-specific session vars that interfere
+    for k in ['REPLIT_ASKPASS_PID2_SESSION', 'REPLIT_SESSION']:
+        env.pop(k, None)
     # Remove stale lock files
     for lock in ['config.lock', 'index.lock', 'COMMIT_EDITMSG.lock']:
         lp = os.path.join(base, '.git', lock)
