@@ -4445,6 +4445,222 @@ def telethon_stats():
         return jsonify({'error': str(e)}), 500
 
 
+_poster_thread = None
+_poster_status = {'running': False, 'posted': 0, 'total': 0, 'last': ''}
+
+
+def _run_restaurant_poster():
+    import json as _json
+    import re as _re
+    import time as _time
+    global _poster_status
+
+    CHANNEL = '@restoranvietnam'
+    PROGRESS_FILE = 'post_progress.json'
+    bot_token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+    if not bot_token:
+        _poster_status['running'] = False
+        return
+
+    def _clean(title):
+        t = _re.sub(r'^[\U0001F300-\U0001FFFF\u2600-\u26FF\u2700-\u27BF\s]+', '', title)
+        t = _re.sub(r'^РЕСТОРАН:\s*|^НАЗВАНИЕ:\s*', '', t)
+        t = _re.sub(r'\s*сапфир.*', '', t, flags=_re.IGNORECASE)
+        t = _re.sub(r'\[.*?\]|\(.*?\)', '', t)
+        t = _re.sub(r'\s{2,}', ' ', t).strip()
+        return t
+
+    def _download(url):
+        try:
+            r = requests.get(url, timeout=25, headers={'User-Agent': 'Mozilla/5.0'})
+            if r.status_code == 200 and len(r.content) > 1000:
+                return r.content
+        except Exception:
+            pass
+        return None
+
+    def _send(method, data=None, files=None):
+        url = f'https://api.telegram.org/bot{bot_token}/{method}'
+        for _ in range(3):
+            try:
+                if files:
+                    r = requests.post(url, data=data, files=files, timeout=90)
+                else:
+                    r = requests.post(url, json=data, timeout=30)
+                result = r.json()
+                if result.get('ok'):
+                    return result
+                err = result.get('description', '')
+                if 'Too Many Requests' in err:
+                    m = _re.search(r'(\d+)', err)
+                    _time.sleep(int(m.group(1)) + 5 if m else 40)
+                    continue
+                logging.warning(f'TG error: {err}')
+                _time.sleep(3)
+            except Exception as e:
+                logging.warning(f'TG request error: {e}')
+                _time.sleep(5)
+        return None
+
+    # Load restaurants
+    with open('listings_vietnam.json', encoding='utf-8') as f:
+        vn = _json.load(f)
+    restaurants = []
+    for item in vn['restaurants']:
+        if item['title'] == 'Channel created':
+            continue
+        desc = item.get('description', '')
+        if len(desc) < 80:
+            continue
+        photos = item.get('photos') or item.get('images') or []
+        if not photos:
+            continue
+        restaurants.append({'id': item['id'], 'title': _clean(item['title']),
+                             'description': desc, 'photos': photos[:10]})
+
+    # Load progress
+    progress = {'posted_ids': [], 'tg_data': {}}
+    if os.path.exists(PROGRESS_FILE):
+        with open(PROGRESS_FILE) as f:
+            progress = _json.load(f)
+    posted_ids = set(progress['posted_ids'])
+    tg_data = progress.get('tg_data', {})
+
+    to_post = [r for r in restaurants if r['id'] not in posted_ids]
+    _poster_status['total'] = len(to_post)
+    _poster_status['posted'] = 0
+    logging.info(f'Restaurant poster: {len(to_post)} to post')
+
+    for r in to_post:
+        if not _poster_status['running']:
+            break
+        _poster_status['last'] = r['title']
+        caption = f"<b>🍽 {r['title']}</b>\n\n{r['description']}"
+
+        imgs = []
+        for url in r['photos']:
+            img = _download(url)
+            if img:
+                imgs.append(img)
+            _time.sleep(0.3)
+
+        if not imgs:
+            logging.warning(f'No photos for {r["title"]}')
+            _time.sleep(3)
+            continue
+
+        if len(imgs) == 1:
+            result = _send('sendPhoto', data={
+                'chat_id': CHANNEL, 'caption': caption[:1024], 'parse_mode': 'HTML'
+            }, files={'photo': ('p.jpg', imgs[0], 'image/jpeg')})
+            imgs.clear()
+            if result:
+                msg = result['result']
+                photo = msg.get('photo', [])
+                fid = max(photo, key=lambda x: x.get('file_size', 0))['file_id'] if photo else None
+                tg_data[r['id']] = {'message_id': msg['message_id'], 'file_ids': [fid] if fid else []}
+        else:
+            files = {}
+            media = []
+            for i, img in enumerate(imgs):
+                k = f'p{i}'
+                files[k] = (f'{k}.jpg', img, 'image/jpeg')
+                entry = {'type': 'photo', 'media': f'attach://{k}'}
+                if i == 0:
+                    entry['caption'] = caption[:1024]
+                    entry['parse_mode'] = 'HTML'
+                media.append(entry)
+            result = _send('sendMediaGroup', data={
+                'chat_id': CHANNEL, 'media': _json.dumps(media)
+            }, files=files)
+            imgs.clear()
+            files.clear()
+            if result:
+                msgs = result['result']
+                fids = []
+                for msg in msgs:
+                    ph = msg.get('photo', [])
+                    if ph:
+                        fids.append(max(ph, key=lambda x: x.get('file_size', 0))['file_id'])
+                tg_data[r['id']] = {'message_id': msgs[0]['message_id'] if msgs else None, 'file_ids': fids}
+
+        if r['id'] in tg_data:
+            posted_ids.add(r['id'])
+            _poster_status['posted'] += 1
+            progress['posted_ids'] = list(posted_ids)
+            progress['tg_data'] = tg_data
+            with open(PROGRESS_FILE, 'w') as f:
+                _json.dump(progress, f, ensure_ascii=False)
+            logging.info(f'Posted [{_poster_status["posted"]}/{_poster_status["total"]}]: {r["title"][:40]}  msg={tg_data[r["id"]].get("message_id")}')
+
+        _time.sleep(5)
+
+    # Update JSON with TG links
+    if tg_data:
+        with open('listings_vietnam.json', encoding='utf-8') as f:
+            vn_data = _json.load(f)
+        for item in vn_data['restaurants']:
+            rid = item.get('id')
+            if rid not in tg_data:
+                continue
+            info = tg_data[rid]
+            if info.get('message_id'):
+                item['telegram_link'] = f'https://t.me/restoranvietnam/{info["message_id"]}'
+            if info.get('file_ids'):
+                item['tg_file_ids'] = info['file_ids']
+        with open('listings_vietnam.json', 'w', encoding='utf-8') as f:
+            _json.dump(vn_data, f, ensure_ascii=False, indent=2)
+
+        with open('listings_data.json', encoding='utf-8') as f:
+            main_data = _json.load(f)
+        vn_by_id = {r['id']: r for r in vn_data['restaurants']}
+        for r in main_data['vietnam']['restaurants']:
+            rid = r.get('id')
+            if rid and rid in vn_by_id and rid in tg_data:
+                r['telegram_link'] = vn_by_id[rid].get('telegram_link', r.get('telegram_link'))
+                if vn_by_id[rid].get('tg_file_ids'):
+                    r['tg_file_ids'] = vn_by_id[rid]['tg_file_ids']
+        with open('listings_data.json', 'w', encoding='utf-8') as f:
+            _json.dump(main_data, f, ensure_ascii=False, indent=2)
+        logging.info('JSON updated with TG links')
+
+    _poster_status['running'] = False
+    logging.info(f'Restaurant poster done. Posted {len(posted_ids)} total.')
+
+
+@app.route('/api/admin/post-restaurants', methods=['POST'])
+def api_post_restaurants():
+    global _poster_thread, _poster_status
+    if _poster_status.get('running'):
+        return jsonify({'status': 'already_running', 'posted': _poster_status['posted'],
+                        'total': _poster_status['total'], 'last': _poster_status['last']})
+    action = request.json.get('action', 'start') if request.is_json else 'start'
+    if action == 'stop':
+        _poster_status['running'] = False
+        return jsonify({'status': 'stopped'})
+    _poster_status['running'] = True
+    _poster_thread = threading.Thread(target=_run_restaurant_poster, daemon=True)
+    _poster_thread.start()
+    return jsonify({'status': 'started'})
+
+
+@app.route('/api/admin/post-restaurants', methods=['GET'])
+def api_post_restaurants_status():
+    progress = {'posted_ids': []}
+    try:
+        with open('post_progress.json') as f:
+            progress = json.load(f)
+    except Exception:
+        pass
+    return jsonify({
+        'running': _poster_status.get('running', False),
+        'posted': _poster_status.get('posted', 0),
+        'total': _poster_status.get('total', 0),
+        'last': _poster_status.get('last', ''),
+        'total_done': len(progress.get('posted_ids', []))
+    })
+
+
 if __name__ == '__main__':
     import threading
     t = threading.Thread(target=run_bot, daemon=True)

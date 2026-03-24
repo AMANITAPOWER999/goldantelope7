@@ -1,4 +1,6 @@
-Total: 318 | Already posted: 5 | To post: 313
-[1/313]   (4 photos)
-  ✓ OK
-[2/313]   (4 photos)
+Total: 318 | Already posted: 6 | To post: 312
+[1/312]   (4 photos)
+  Downloaded 4/4 photos
+  ✓ OK  msg_id=40  files=4
+[2/312]   (4 photos)
+  Downloaded 4/4 photos
