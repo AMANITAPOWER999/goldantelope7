@@ -8114,7 +8114,12 @@
             activeIdx = (activeIdx + direction + imgs.length) % imgs.length;
             
             imgs[activeIdx].classList.add('active');
-            dots[activeIdx].classList.add('active');
+            if (dots[activeIdx]) dots[activeIdx].classList.add('active');
+            // Load lazy image on demand
+            const target = imgs[activeIdx];
+            if (target && target.dataset.src && (!target.src || target.src.includes('data:image/gif'))) {
+                target.src = target.dataset.src;
+            }
         }
 
         // Subcategory state for Vietnam marketplace/exchange
@@ -8344,19 +8349,26 @@
                                 return url;
                             }).filter(Boolean);
                         } else {
-                            if (images.length === 0) {
-                                if (item.image_url) images.push(item.image_url);
-                                if (item.image_url_2) images.push(item.image_url_2);
-                                if (item.image_url_3) images.push(item.image_url_3);
-                                if (item.image_url_4) images.push(item.image_url_4);
-                                if (images.length === 0 && item.photo_url) images.push(item.photo_url);
+                            // Restaurants: use tg_file_ids via bot API proxy (direct Telegram)
+                            if (category === 'restaurants' && Array.isArray(item.tg_file_ids) && item.tg_file_ids.length > 0) {
+                                images = item.tg_file_ids.map(fid => `/tg_file/${encodeURIComponent(fid)}`);
+                            } else if (category === 'restaurants' && Array.isArray(item.photo_msg_ids) && item.photo_msg_ids.length > 0) {
+                                images = item.photo_msg_ids.map(mid => `/tg_img/restoranvietnam/${mid}`);
+                            } else {
+                                if (images.length === 0) {
+                                    if (item.image_url) images.push(item.image_url);
+                                    if (item.image_url_2) images.push(item.image_url_2);
+                                    if (item.image_url_3) images.push(item.image_url_3);
+                                    if (item.image_url_4) images.push(item.image_url_4);
+                                    if (images.length === 0 && item.photo_url) images.push(item.photo_url);
+                                }
+                                images = images.filter(url => url && typeof url === 'string' && url.startsWith('http'));
+                                images = images.map(url => {
+                                    const tmeMatch = url.match(/^https:\/\/t\.me\/([^\/]+)\/(\d+)$/);
+                                    if (tmeMatch) return `/tg_img/${tmeMatch[1]}/${tmeMatch[2]}`;
+                                    return url;
+                                });
                             }
-                            images = images.filter(url => url && typeof url === 'string' && url.startsWith('http'));
-                            images = images.map(url => {
-                                const tmeMatch = url.match(/^https:\/\/t\.me\/([^\/]+)\/(\d+)$/);
-                                if (tmeMatch) return `/tg_img/${tmeMatch[1]}/${tmeMatch[2]}`;
-                                return url;
-                            });
                         }
                         let sliderHtml = '';
                         let badgesHtml = '';
@@ -8562,7 +8574,7 @@
                                     if (img.includes('github.com') && !img.includes('raw.githubusercontent.com')) {
                                         finalImg = img.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
                                     }
-                                    return `<img src="${finalImg}" class="${idx === 0 ? 'active' : ''}" data-idx="${idx}" onerror="this.onerror=null;this.src='/static/images/placeholder.jpg';this.classList.add('active');" loading="lazy">`;
+                                    return `<img src="${idx === 0 ? finalImg : 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'}" data-src="${finalImg}" class="${idx === 0 ? 'active' : ''}" data-idx="${idx}" onerror="this.onerror=null;this.src='/static/images/placeholder.jpg';this.classList.add('active');" loading="${idx === 0 ? 'eager' : 'lazy'}">`;
                                 }).join('')}
                                 ${images.length > 1 ? `
                                     <button class="slider-nav prev" onclick="changeListingImage('${item.id}', -1, event)">‹</button>
