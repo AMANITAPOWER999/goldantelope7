@@ -2897,40 +2897,58 @@ def tg_file_proxy(file_id):
 
 @app.route('/tg_img/<channel>/<int:post_id>')
 def tg_photo_proxy(channel, post_id):
-    """Extract real CDN image URL from Telegram og:image and redirect browser to it."""
+    """Fetch CDN image from Telegram og:image and stream it directly to the browser."""
     cache_key = f'{channel}_{post_id}'
     now = time.time()
-    
+
+    cdn_url = None
     with _tg_photo_cache_lock:
         entry = _tg_photo_cache.get(cache_key)
         if entry and (now - entry.get('ts', 0)) < _TG_PHOTO_CACHE_TTL:
             cdn_url = entry.get('url')
-            if cdn_url:
-                return Response(status=302, headers={'Location': cdn_url, 'Cache-Control': 'public, max-age=72000'})
+            if not cdn_url:
+                return Response(status=404)
+
+    if not cdn_url:
+        try:
+            headers = {
+                'User-Agent': 'TelegramBot (like TwitterBot)',
+                'Accept': 'text/html'
+            }
+            r = requests.get(f'https://t.me/{channel}/{post_id}', headers=headers, timeout=10)
+            if r.status_code == 200:
+                m = re.search(r'<meta property="og:image" content="([^"]+)"', r.text)
+                if not m:
+                    m = re.search(r'<meta name="twitter:image" content="([^"]+)"', r.text)
+                if m:
+                    cdn_url = m.group(1).replace('&amp;', '&')
+                    with _tg_photo_cache_lock:
+                        _tg_photo_cache[cache_key] = {'url': cdn_url, 'ts': now}
+                        if len(_tg_photo_cache) % 10 == 0:
+                            _save_tg_photo_cache(_tg_photo_cache)
+        except Exception as e:
+            logger.warning(f'tg_photo_proxy error for {channel}/{post_id}: {e}')
+
+        if not cdn_url:
+            with _tg_photo_cache_lock:
+                _tg_photo_cache[cache_key] = {'url': None, 'ts': now}
             return Response(status=404)
-    
+
     try:
-        headers = {
-            'User-Agent': 'TelegramBot (like TwitterBot)',
-            'Accept': 'text/html'
-        }
-        r = requests.get(f'https://t.me/{channel}/{post_id}', headers=headers, timeout=10)
-        if r.status_code == 200:
-            m = re.search(r'<meta property="og:image" content="([^"]+)"', r.text)
-            if not m:
-                m = re.search(r'<meta name="twitter:image" content="([^"]+)"', r.text)
-            if m:
-                cdn_url = m.group(1).replace('&amp;', '&')
-                with _tg_photo_cache_lock:
-                    _tg_photo_cache[cache_key] = {'url': cdn_url, 'ts': now}
-                    if len(_tg_photo_cache) % 10 == 0:
-                        _save_tg_photo_cache(_tg_photo_cache)
-                return Response(status=302, headers={'Location': cdn_url, 'Cache-Control': 'public, max-age=72000'})
+        img_resp = requests.get(cdn_url, timeout=10, stream=True)
+        if img_resp.status_code == 200:
+            content_type = img_resp.headers.get('Content-Type', 'image/jpeg')
+            return Response(
+                img_resp.content,
+                status=200,
+                headers={
+                    'Content-Type': content_type,
+                    'Cache-Control': 'public, max-age=72000',
+                }
+            )
     except Exception as e:
-        logger.warning(f'tg_photo_proxy error for {channel}/{post_id}: {e}')
-    
-    with _tg_photo_cache_lock:
-        _tg_photo_cache[cache_key] = {'url': None, 'ts': now}
+        logger.warning(f'tg_photo_proxy stream error for {channel}/{post_id}: {e}')
+
     return Response(status=404)
 
 # ============ УПРАВЛЕНИЕ ГОРОДАМИ ============
