@@ -1,0 +1,103 @@
+==== Build Queued at 2026-03-24 09:33:58 / Commit SHA: c69bd0e =====
+
+--> FROM docker.io/library/python:3.9@sha256:da5aee29682d12a6649f51c8d6f15b87deb3e6c524b923c41d0cb3304d07c913
+DONE 0.0s
+
+--> RUN useradd -m -u 1000 user
+CACHED
+
+--> WORKDIR /app
+CACHED
+
+--> Restoring cache
+DONE 19.1s
+
+--> COPY --chown=user . .
+DONE 0.0s
+
+--> RUN pip install --no-cache-dir telethon fastapi uvicorn[standard]
+Collecting telethon
+  Downloading telethon-1.42.0-py3-none-any.whl (748 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 748.5/748.5 kB 68.1 MB/s eta 0:00:00
+Collecting fastapi
+  Downloading fastapi-0.128.8-py3-none-any.whl (103 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 103.6/103.6 kB 209.5 MB/s eta 0:00:00
+Collecting uvicorn[standard]
+  Downloading uvicorn-0.39.0-py3-none-any.whl (68 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 68.5/68.5 kB 298.5 MB/s eta 0:00:00
+Collecting rsa
+  Downloading rsa-4.9.1-py3-none-any.whl (34 kB)
+Collecting pyaes
+  Downloading pyaes-1.6.1.tar.gz (28 kB)
+  Preparing metadata (setup.py): started
+  Preparing metadata (setup.py): finished with status 'done'
+Collecting typing-inspection>=0.4.2
+  Downloading typing_inspection-0.4.2-py3-none-any.whl (14 kB)
+Collecting starlette<1.0.0,>=0.40.0
+  Downloading starlette-0.49.3-py3-none-any.whl (74 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 74.3/74.3 kB 209.2 MB/s eta 0:00:00
+Collecting pydantic>=2.7.0
+  Downloading pydantic-2.12.5-py3-none-any.whl (463 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 463.6/463.6 kB 323.6 MB/s eta 0:00:00
+Collecting typing-extensions>=4.8.0
+  Downloading typing_extensions-4.15.0-py3-none-any.whl (44 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 44.6/44.6 kB 260.6 MB/s eta 0:00:00
+Collecting annotated-doc>=0.0.2
+  Downloading annotated_doc-0.0.4-py3-none-any.whl (5.3 kB)
+Collecting click>=7.0
+  Downloading click-8.1.8-py3-none-any.whl (98 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 98.2/98.2 kB 262.1 MB/s eta 0:00:00
+Collecting h11>=0.8
+  Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+Collecting watchfiles>=0.13
+  Downloading watchfiles-1.1.1-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (457 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 457.5/457.5 kB 198.0 MB/s eta 0:00:00
+Collecting websockets>=10.4
+  Downloading websockets-15.0.1-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl (181 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 181.4/181.4 kB 206.5 MB/s eta 0:00:00
+Collecting pyyaml>=5.1
+  Downloading pyyaml-6.0.3-cp39-cp39-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (750 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 750.8/750.8 kB 399.6 MB/s eta 0:00:00
+Collecting python-dotenv>=0.13
+  Downloading python_dotenv-1.2.1-py3-none-any.whl (21 kB)
+Collecting httptools>=0.6.3
+  Downloading httptools-0.7.1-cp39-cp39-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (441 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 441.5/441.5 kB 416.2 MB/s eta 0:00:00
+Collecting uvloop>=0.15.1
+  Downloading uvloop-0.22.1-cp39-cp39-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (3.7 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.7/3.7 MB 267.1 MB/s eta 0:00:00
+Collecting pydantic-core==2.41.5
+  Downloading pydantic_core-2.41.5-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 330.4 MB/s eta 0:00:00
+Collecting annotated-types>=0.6.0
+  Downloading annotated_types-0.7.0-py3-none-any.whl (13 kB)
+Collecting anyio<5,>=3.6.2
+  Downloading anyio-4.12.1-py3-none-any.whl (113 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 113.6/113.6 kB 357.4 MB/s eta 0:00:00
+Collecting pyasn1>=0.1.3
+  Downloading pyasn1-0.6.3-py3-none-any.whl (83 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 84.0/84.0 kB 313.6 MB/s eta 0:00:00
+Collecting exceptiongroup>=1.0.2
+  Downloading exceptiongroup-1.3.1-py3-none-any.whl (16 kB)
+Collecting idna>=2.8
+  Downloading idna-3.11-py3-none-any.whl (71 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 71.0/71.0 kB 308.2 MB/s eta 0:00:00
+Building wheels for collected packages: pyaes
+  Building wheel for pyaes (setup.py): started
+  Building wheel for pyaes (setup.py): finished with status 'done'
+  Created wheel for pyaes: filename=pyaes-1.6.1-py3-none-any.whl size=26423 sha256=8d65d64039748f8868b24c7af777e69ddbd94881e84728933f1673e593485a89
+  Stored in directory: /tmp/pip-ephem-wheel-cache-xd4y42or/wheels/33/13/e9/ef9894385084d8e4fab38f5f83afda49a3d593d8afc907c8fd
+Successfully built pyaes
+Installing collected packages: pyaes, websockets, uvloop, typing-extensions, pyyaml, python-dotenv, pyasn1, idna, httptools, h11, click, annotated-types, annotated-doc, uvicorn, typing-inspection, rsa, pydantic-core, exceptiongroup, telethon, pydantic, anyio, watchfiles, starlette, fastapi
+Successfully installed annotated-doc-0.0.4 annotated-types-0.7.0 anyio-4.12.1 click-8.1.8 exceptiongroup-1.3.1 fastapi-0.128.8 h11-0.16.0 httptools-0.7.1 idna-3.11 pyaes-1.6.1 pyasn1-0.6.3 pydantic-2.12.5 pydantic-core-2.41.5 python-dotenv-1.2.1 pyyaml-6.0.3 rsa-4.9.1 starlette-0.49.3 telethon-1.42.0 typing-extensions-4.15.0 typing-inspection-0.4.2 uvicorn-0.39.0 uvloop-0.22.1 watchfiles-1.1.1 websockets-15.0.1
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 23.0.1 -> 26.0.1
+[notice] To update, run: pip install --upgrade pip
+DONE 11.6s
+
+--> Pushing image
+DONE 1.1s
+
+--> Exporting cache
+DONE 0.3s
