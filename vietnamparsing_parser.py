@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.environ.get('VIETNAMPARSING_BOT_TOKEN', '')
 SOURCE_CHANNEL = 'vietnamparsing'
-ARENDABAY_CHANNEL = 'arendabaykavietnam'
+ARENDABAY_CHANNEL = 'arendabaykovavtovietnam'
 LISTINGS_FILE = 'listings_vietnam.json'
 INITIAL_FETCH_LIMIT = 200
 POLL_INTERVAL = 60
@@ -554,7 +554,7 @@ def build_listing_item(msg: dict, item_id: str) -> dict | None:
 
 
 def build_arendabay_transport_item(msg: dict, item_id: str) -> dict | None:
-    """Build a transport/bikes listing from an @arendabaykavietnam post."""
+    """Build a transport/bikes listing from an @arendabaykovavtovietnam post."""
     text = msg.get('text', '')
     if is_spam(text):
         return None
@@ -597,7 +597,7 @@ def build_arendabay_transport_item(msg: dict, item_id: str) -> dict | None:
 
 
 def process_arendabay_update(update: dict, override_photos: list | None = None) -> dict | None:
-    """Process a single Bot API update from @arendabaykavietnam into a transport/bikes listing."""
+    """Process a single Bot API update from @arendabaykovavtovietnam into a transport/bikes listing."""
     post = update.get('channel_post') or update.get('message')
     if not post:
         return None
@@ -632,26 +632,72 @@ def process_arendabay_update(update: dict, override_photos: list | None = None) 
     return build_arendabay_transport_item(msg_data, item_id)
 
 
-def fetch_arendabay_history(data: dict, existing_ids: set, max_msgs: int = 100) -> int:
-    """Try to fetch recent posts from @arendabaykavietnam via Bot API and add them as transport/bikes."""
-    if not BOT_TOKEN:
-        return 0
+def scrape_arendabay_page(before_id: int = None) -> list:
+    """Scrape a page of posts from t.me/s/arendabaykovavtovietnam."""
+    url = f"https://t.me/s/{ARENDABAY_CHANNEL}"
+    if before_id:
+        url += f"?before={before_id}"
+    try:
+        resp = requests.get(url, timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
+        resp.raise_for_status()
+        page = resp.text
+    except Exception as e:
+        logger.error(f"Failed to fetch {url}: {e}")
+        return []
+
+    msg_blocks = re.split(r'(?=<div class="tgme_widget_message_wrap)', page)
+    results = []
+    for block in msg_blocks[1:]:
+        post_id_m = re.search(r'data-post="[^/]+/(\d+)"', block)
+        if not post_id_m:
+            continue
+        post_id = int(post_id_m.group(1))
+        date_m = re.search(r'datetime="([^"]+)"', block)
+        date_str = date_m.group(1) if date_m else datetime.now(timezone.utc).isoformat()
+        text_m = re.search(r'class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>', block, re.DOTALL)
+        text = clean_html_text(text_m.group(1)) if text_m else ''
+        imgs = re.findall(r"background-image:url\('(https://cdn[^']+)'\)", block)
+        imgs = list(dict.fromkeys(imgs))
+        results.append({'post_id': post_id, 'date': date_str, 'text': text, 'images': imgs})
+    return results
+
+
+def fetch_arendabay_history(data: dict, existing_ids: set, max_msgs: int = 200) -> int:
+    """Scrape recent posts from @arendabaykovavtovietnam and add them as transport/bikes."""
     new_count = 0
     if 'transport' not in data:
         data['transport'] = []
     try:
-        r = requests.get(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/getChat",
-            params={'chat_id': f'@{ARENDABAY_CHANNEL}'}, timeout=10
-        )
-        if not r.ok or not r.json().get('ok'):
-            logger.warning(f"Bot has no access to @{ARENDABAY_CHANNEL} yet. "
-                           f"Please add @goldantelopeasia_bot as admin.")
-            return 0
-        logger.info(f"Bot has access to @{ARENDABAY_CHANNEL}, fetching history...")
+        all_msgs = []
+        before_id = None
+        for _ in range(10):
+            page_msgs = scrape_arendabay_page(before_id=before_id)
+            if not page_msgs:
+                break
+            all_msgs.extend(page_msgs)
+            if len(all_msgs) >= max_msgs:
+                break
+            before_id = min(m['post_id'] for m in page_msgs)
+            if len(page_msgs) < 3:
+                break
+            time.sleep(0.5)
+
+        for msg in all_msgs:
+            # Skip system "Channel created" post
+            if msg['text'].strip().lower() in ('channel created', 'канал создан', '') and not msg['images']:
+                continue
+            item_id = f"arendabay_{msg['post_id']}"
+            if item_id in existing_ids:
+                continue
+            item = build_arendabay_transport_item(msg, item_id)
+            if item is None:
+                continue
+            data['transport'].insert(0, item)
+            existing_ids.add(item_id)
+            new_count += 1
+            logger.info(f"[arendabay] New bike: {item['title'][:60]}")
     except Exception as e:
-        logger.warning(f"Cannot check @{ARENDABAY_CHANNEL} access: {e}")
-        return 0
+        logger.warning(f"Arendabay scrape error: {e}")
     return new_count
 
 
@@ -832,7 +878,7 @@ def get_parser_state() -> dict:
 def run_initial_fetch():
     _parser_state['status'] = 'fetching_initial'
     count = fetch_initial_200()
-    # Also try to fetch history from @arendabaykavietnam (needs bot to be admin)
+    # Also try to fetch history from @arendabaykovavtovietnam (needs bot to be admin)
     try:
         ab_data = load_listings()
         ab_ids = get_existing_ids(ab_data)
@@ -856,7 +902,7 @@ def _group_media_updates(updates: list) -> tuple[list, list, list]:
     Returns:
       vietnam_items: list of (update, override_photos) tuples for @vietnamparsing
       thailand_updates: list of raw updates from @thailandparsing
-      arendabay_items: list of (update, override_photos) tuples for @arendabaykavietnam
+      arendabay_items: list of (update, override_photos) tuples for @arendabaykovavtovietnam
     """
     from collections import OrderedDict
 
@@ -1090,6 +1136,19 @@ def run_monitoring_loop():
                     _parser_state['new_today'] = _parser_state.get('new_today', 0) + n_vn
                     _parser_state['total_parsed'] = _parser_state.get('total_parsed', 0) + n_vn
                     logger.info(f"t.me/s scrape added {n_vn} new VN listings")
+
+                # Arendabay: scrape new bike posts
+                try:
+                    data = load_listings()
+                    existing_ids = get_existing_ids(data)
+                    n_ab = fetch_arendabay_history(data, existing_ids, max_msgs=20)
+                    if n_ab > 0:
+                        save_listings(data)
+                        _parser_state['new_today'] = _parser_state.get('new_today', 0) + n_ab
+                        _parser_state['total_parsed'] = _parser_state.get('total_parsed', 0) + n_ab
+                        logger.info(f"Arendabay scrape added {n_ab} new bike listings")
+                except Exception as e_ab:
+                    logger.warning(f"Arendabay scrape error: {e_ab}")
 
                 # Thailand: scan new posts by consecutive ID probing
                 try:
