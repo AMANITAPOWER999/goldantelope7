@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.environ.get('VIETNAMPARSING_BOT_TOKEN', '')
 SOURCE_CHANNEL = 'vietnamparsing'
-ARENDABAY_CHANNEL = 'arendabaykovavtovietnam'
+ARENDABAY_CHANNEL = 'arendabaykavietnam'
+BARAHOLKA_GROUP = 'hsjsbkskbs'  # supergroup @hsjsbkskbs = baraholkainvietnam
 LISTINGS_FILE = 'listings_vietnam.json'
 INITIAL_FETCH_LIMIT = 200
 POLL_INTERVAL = 60
@@ -554,7 +555,7 @@ def build_listing_item(msg: dict, item_id: str) -> dict | None:
 
 
 def build_arendabay_transport_item(msg: dict, item_id: str) -> dict | None:
-    """Build a transport/bikes listing from an @arendabaykovavtovietnam post."""
+    """Build a transport/bikes listing from an @arendabaykavietnam post."""
     text = msg.get('text', '')
     if is_spam(text):
         return None
@@ -597,7 +598,7 @@ def build_arendabay_transport_item(msg: dict, item_id: str) -> dict | None:
 
 
 def process_arendabay_update(update: dict, override_photos: list | None = None) -> dict | None:
-    """Process a single Bot API update from @arendabaykovavtovietnam into a transport/bikes listing."""
+    """Process a single Bot API update from @arendabaykavietnam into a transport/bikes listing."""
     post = update.get('channel_post') or update.get('message')
     if not post:
         return None
@@ -633,7 +634,7 @@ def process_arendabay_update(update: dict, override_photos: list | None = None) 
 
 
 def scrape_arendabay_page(before_id: int = None) -> list:
-    """Scrape a page of posts from t.me/s/arendabaykovavtovietnam."""
+    """Scrape a page of posts from t.me/s/arendabaykavietnam."""
     url = f"https://t.me/s/{ARENDABAY_CHANNEL}"
     if before_id:
         url += f"?before={before_id}"
@@ -663,7 +664,7 @@ def scrape_arendabay_page(before_id: int = None) -> list:
 
 
 def fetch_arendabay_history(data: dict, existing_ids: set, max_msgs: int = 200) -> int:
-    """Scrape recent posts from @arendabaykovavtovietnam and add them as transport/bikes."""
+    """Scrape recent posts from @arendabaykavietnam and add them as transport/bikes."""
     new_count = 0
     if 'transport' not in data:
         data['transport'] = []
@@ -878,7 +879,7 @@ def get_parser_state() -> dict:
 def run_initial_fetch():
     _parser_state['status'] = 'fetching_initial'
     count = fetch_initial_200()
-    # Also try to fetch history from @arendabaykovavtovietnam (needs bot to be admin)
+    # Also try to fetch history from @arendabaykavietnam (needs bot to be admin)
     try:
         ab_data = load_listings()
         ab_ids = get_existing_ids(ab_data)
@@ -902,7 +903,7 @@ def _group_media_updates(updates: list) -> tuple[list, list, list]:
     Returns:
       vietnam_items: list of (update, override_photos) tuples for @vietnamparsing
       thailand_updates: list of raw updates from @thailandparsing
-      arendabay_items: list of (update, override_photos) tuples for @arendabaykovavtovietnam
+      arendabay_items: list of (update, override_photos) tuples for @arendabaykavietnam
     """
     from collections import OrderedDict
 
