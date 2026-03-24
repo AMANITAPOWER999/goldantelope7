@@ -8714,8 +8714,8 @@
                                     <!-- Group TG и Telegram кнопки -->
                                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
                                         ${(() => {
-                                            const tgGroup = currentCountry === 'thailand' ? 'https://t.me/thailandparsing' : 'https://t.me/vietnamparsing';
-                                            const tgLabel = currentCountry === 'thailand' ? '@thailandparsing' : '@vietnamparsing';
+                                            const tgGroup = currentCountry === 'thailand' ? 'https://t.me/thailandparsing' : (category === 'restaurants' ? 'https://t.me/restoranvietnam' : 'https://t.me/vietnamparsing');
+                                            const tgLabel = currentCountry === 'thailand' ? '@thailandparsing' : (category === 'restaurants' ? '@restoranvietnam' : '@vietnamparsing');
                                             return `<a href="${tgGroup}" target="_blank" style="display: block; background: transparent; border: 2px solid #0088cc; color: #0088cc; padding: 10px; border-radius: 6px; text-align: center; text-decoration: none; font-weight: 600;">✈️ Group TG</a>`;
                                         })()}
                                         ${(() => {
@@ -9837,7 +9837,7 @@
                             ${contactSource ? `<p style="margin:0;font-size:13px;color:#666;">👤 Источник: <b>${contactSource}</b></p>` : ''}
                         </div>
                         <div style="display:flex;flex-direction:column;gap:10px;">
-                            <a href="${currentCountry === 'thailand' ? 'https://t.me/thailandparsing' : 'https://t.me/vietnamparsing'}" target="_blank" style="display:block;background:#0088cc;text-decoration:none;text-align:center;padding:12px;border-radius:8px;color:white;font-size:14px;font-weight:600;">✈️ Group TG — ${currentCountry === 'thailand' ? '@thailandparsing' : '@vietnamparsing'}</a>
+                            <a href="${currentCountry === 'thailand' ? 'https://t.me/thailandparsing' : (category === 'restaurants' ? 'https://t.me/restoranvietnam' : 'https://t.me/vietnamparsing')}" target="_blank" style="display:block;background:#0088cc;text-decoration:none;text-align:center;padding:12px;border-radius:8px;color:white;font-size:14px;font-weight:600;">✈️ Group TG — ${currentCountry === 'thailand' ? '@thailandparsing' : (category === 'restaurants' ? '@restoranvietnam' : '@vietnamparsing')}</a>
                             ${contactChannelUrl ? `<a href="${contactChannelUrl}" target="_blank" style="display:block;background:#0088cc;text-decoration:none;text-align:center;padding:12px;border-radius:8px;color:white;font-size:14px;font-weight:600;">✈️ Написать в Telegram: ${contactSource}</a>` : ''}
                             ${postLink ? `<a href="${postLink}" target="_blank" style="display:block;background:#d4af37;text-decoration:none;text-align:center;padding:12px;border-radius:8px;color:white;font-size:14px;font-weight:600;">🔗 Оригинал объявления</a>` : ''}
                         </div>
