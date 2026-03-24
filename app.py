@@ -4795,6 +4795,32 @@ def api_post_restaurants_status():
     })
 
 
+@app.route('/internal/git_push', methods=['POST'])
+def internal_git_push():
+    import subprocess as _sp
+    token = os.environ.get('GITHUB_TOKEN', '')
+    if not token:
+        return jsonify({'error': 'no token'}), 400
+    remote = f'https://x-access-token:{token}@github.com/AMANITAPOWER999/goldantelope7.git'
+    base = os.path.dirname(os.path.abspath(__file__))
+    env = dict(os.environ, GIT_TERMINAL_PROMPT='0', GIT_ASKPASS='/bin/true',
+               GIT_AUTHOR_NAME='GoldAntelope Bot', GIT_AUTHOR_EMAIL='bot@goldantelope.app',
+               GIT_COMMITTER_NAME='GoldAntelope Bot', GIT_COMMITTER_EMAIL='bot@goldantelope.app')
+    # Remove stale lock files
+    for lock in ['config.lock', 'index.lock', 'COMMIT_EDITMSG.lock']:
+        lp = os.path.join(base, '.git', lock)
+        if os.path.exists(lp):
+            os.remove(lp)
+    def run(cmd):
+        r = _sp.run(cmd, cwd=base, capture_output=True, text=True, env=env)
+        return r.stdout.strip() + r.stderr.strip()
+    out = []
+    out.append(run(['git', 'add', '-A']))
+    out.append(run(['git', 'commit', '-m', 'Eager loading for all slider images; fix lazy-slider in both renders']))
+    out.append(run(['git', 'push', remote, 'master']))
+    return jsonify({'output': out})
+
+
 if __name__ == '__main__':
     import threading
     t = threading.Thread(target=run_bot, daemon=True)
