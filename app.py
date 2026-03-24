@@ -2888,10 +2888,33 @@ _tg_photo_cache = _load_tg_photo_cache()
 
 @app.route('/tg_file/<path:file_id>')
 def tg_file_proxy(file_id):
-    """Redirect to actual Telegram photo URL by file_id."""
-    url = get_telegram_photo_url(file_id)
-    if url:
-        return Response(status=302, headers={'Location': url, 'Cache-Control': 'public, max-age=3000'})
+    """Get direct Telegram file via Bot API (admin) and stream to browser. No CDN."""
+    bot_token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+    if not bot_token:
+        return Response(status=503)
+    try:
+        # Get direct file_path from Telegram via bot
+        r = requests.get(
+            f'https://api.telegram.org/bot{bot_token}/getFile',
+            params={'file_id': file_id},
+            timeout=10
+        )
+        if r.status_code == 200 and r.json().get('ok'):
+            file_path = r.json()['result']['file_path']
+            tg_url = f'https://api.telegram.org/file/bot{bot_token}/{file_path}'
+            img = requests.get(tg_url, timeout=15, stream=True)
+            if img.status_code == 200:
+                # Force image/jpeg — Telegram sometimes returns application/octet-stream
+                ext = file_path.rsplit('.', 1)[-1].lower() if '.' in file_path else 'jpg'
+                ct_map = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'webp': 'image/webp'}
+                content_type = ct_map.get(ext, 'image/jpeg')
+                return Response(
+                    img.content,
+                    status=200,
+                    headers={'Content-Type': content_type, 'Cache-Control': 'public, max-age=86400'}
+                )
+    except Exception as e:
+        logger.warning(f'tg_file_proxy error for {file_id}: {e}')
     return Response(status=404)
 
 
