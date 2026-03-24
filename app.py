@@ -2886,6 +2886,81 @@ def _save_tg_photo_cache(cache):
 
 _tg_photo_cache = _load_tg_photo_cache()
 
+_FILE_PATH_CACHE_FILE = 'tg_file_paths_cache.json'
+_file_path_cache_lock = threading.Lock()
+
+def _load_file_path_cache():
+    try:
+        if os.path.exists(_FILE_PATH_CACHE_FILE):
+            with open(_FILE_PATH_CACHE_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+def _save_file_path_cache(cache):
+    try:
+        with open(_FILE_PATH_CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(cache, f)
+    except Exception:
+        pass
+
+_file_path_cache = _load_file_path_cache()  # file_id → file_path, persisted
+
+def _prewarm_restaurant_file_paths():
+    """Background: pre-fetch file_paths for all restaurant tg_file_ids via Bot API."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import time as _time
+    _time.sleep(10)
+    bot_token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+    if not bot_token:
+        return
+    try:
+        vn_path = 'listings_vietnam.json'
+        if not os.path.exists(vn_path):
+            return
+        with open(vn_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        restaurants = data.get('restaurants', [])
+        all_fids = []
+        for r in restaurants:
+            for fid in (r.get('tg_file_ids') or []):
+                with _file_path_cache_lock:
+                    if fid not in _file_path_cache:
+                        all_fids.append(fid)
+        if not all_fids:
+            logger.info('file_path cache already warm.')
+            return
+        logger.info(f'Pre-warming file_path cache for {len(all_fids)} file_ids...')
+
+        def _fetch_one(fid):
+            try:
+                r = requests.get(
+                    f'https://api.telegram.org/bot{bot_token}/getFile',
+                    params={'file_id': fid}, timeout=10
+                )
+                if r.status_code == 200 and r.json().get('ok'):
+                    return fid, r.json()['result']['file_path']
+            except Exception:
+                pass
+            return fid, None
+
+        with ThreadPoolExecutor(max_workers=5) as ex:
+            futures = {ex.submit(_fetch_one, fid): fid for fid in all_fids}
+            for future in as_completed(futures):
+                fid, fp = future.result()
+                if fp:
+                    with _file_path_cache_lock:
+                        _file_path_cache[fid] = fp
+
+        with _file_path_cache_lock:
+            _save_file_path_cache(dict(_file_path_cache))
+        logger.info(f'Pre-warm complete: {len(_file_path_cache)} file_paths cached and saved.')
+    except Exception as e:
+        logger.warning(f'Pre-warm error: {e}')
+
+threading.Thread(target=_prewarm_restaurant_file_paths, daemon=True).start()
+
 @app.route('/tg_file/<path:file_id>')
 def tg_file_proxy(file_id):
     """Get direct Telegram file via Bot API (admin) and stream to browser. No CDN."""
@@ -2893,26 +2968,35 @@ def tg_file_proxy(file_id):
     if not bot_token:
         return Response(status=503)
     try:
-        # Get direct file_path from Telegram via bot
-        r = requests.get(
-            f'https://api.telegram.org/bot{bot_token}/getFile',
-            params={'file_id': file_id},
-            timeout=10
-        )
-        if r.status_code == 200 and r.json().get('ok'):
+        # Check cached file_path first
+        with _file_path_cache_lock:
+            file_path = _file_path_cache.get(file_id)
+
+        if not file_path:
+            r = requests.get(
+                f'https://api.telegram.org/bot{bot_token}/getFile',
+                params={'file_id': file_id},
+                timeout=10
+            )
+            if not (r.status_code == 200 and r.json().get('ok')):
+                return Response(status=404)
             file_path = r.json()['result']['file_path']
-            tg_url = f'https://api.telegram.org/file/bot{bot_token}/{file_path}'
-            img = requests.get(tg_url, timeout=15, stream=True)
-            if img.status_code == 200:
-                # Force image/jpeg — Telegram sometimes returns application/octet-stream
-                ext = file_path.rsplit('.', 1)[-1].lower() if '.' in file_path else 'jpg'
-                ct_map = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'webp': 'image/webp'}
-                content_type = ct_map.get(ext, 'image/jpeg')
-                return Response(
-                    img.content,
-                    status=200,
-                    headers={'Content-Type': content_type, 'Cache-Control': 'public, max-age=86400'}
-                )
+            with _file_path_cache_lock:
+                _file_path_cache[file_id] = file_path
+                if len(_file_path_cache) % 20 == 0:
+                    _save_file_path_cache(dict(_file_path_cache))
+
+        tg_url = f'https://api.telegram.org/file/bot{bot_token}/{file_path}'
+        img = requests.get(tg_url, timeout=15, stream=True)
+        if img.status_code == 200:
+            ext = file_path.rsplit('.', 1)[-1].lower() if '.' in file_path else 'jpg'
+            ct_map = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'webp': 'image/webp'}
+            content_type = ct_map.get(ext, 'image/jpeg')
+            return Response(
+                img.content,
+                status=200,
+                headers={'Content-Type': content_type, 'Cache-Control': 'public, max-age=86400'}
+            )
     except Exception as e:
         logger.warning(f'tg_file_proxy error for {file_id}: {e}')
     return Response(status=404)
