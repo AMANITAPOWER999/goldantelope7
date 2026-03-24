@@ -4419,6 +4419,32 @@ def _auto_setup_webhook():
 threading.Thread(target=_auto_setup_webhook, daemon=True, name='WebhookSetup').start()
 
 
+# ──── Telethon Forwarder (запускается в фоне) ────
+def _start_telethon_forwarder():
+    time.sleep(12)  # Дать Flask полностью стартовать
+    sess = os.environ.get('TELETHON_SESSION', '')
+    if not sess:
+        logger.info('TELETHON_SESSION не задана — Telethon forwarder не запущен')
+        return
+    try:
+        from telethon_forwarder import start_forwarder
+        start_forwarder(sess)
+        logger.info('Telethon forwarder запущен')
+    except Exception as e:
+        logger.error(f'Ошибка запуска Telethon forwarder: {e}')
+
+threading.Thread(target=_start_telethon_forwarder, daemon=True, name='TelethonForwarder').start()
+
+
+@app.route('/api/telethon/stats')
+def telethon_stats():
+    try:
+        from telethon_forwarder import STATS
+        return jsonify(STATS)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     import threading
     t = threading.Thread(target=run_bot, daemon=True)

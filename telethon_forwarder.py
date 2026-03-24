@@ -1,9 +1,8 @@
-import asyncio, os, re, difflib, threading, logging
+import asyncio, os, re, difflib, threading, logging, time
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.types import MessageMediaPhoto
-from telethon.tl.functions.channels import JoinChannelRequest
-from telethon.errors import FloodWaitError, ChannelPrivateError, UsernameInvalidError, AuthKeyDuplicatedError
+from telethon.errors import AuthKeyDuplicatedError, FloodWaitError
 
 log = logging.getLogger('telethon_fwd')
 
@@ -11,13 +10,10 @@ API_ID = 32881984
 API_HASH = 'd2588f09dfbc5103ef77ef21c07dbf8b'
 
 DEST = {
-    'VIET':   'vietnamparsing',
-    'THAI':   'thailandparsing',
-    'BIKE':   'visaranvietnam',
-    'MARKET': 'baraholkainvietnam',
-    'FUN':    'razvlecheniyavietnam',
-    'FOOD':   'restoranvietnam',
-    'CHAT':   'obmenvietnam',
+    'VIET': 'vietnamparsing',
+    'THAI': 'thailandparsing',
+    'BIKE': 'visaranvietnam',
+    'FUN':  'razvlecheniyavietnam',
 }
 
 SOURCES = {
@@ -42,14 +38,7 @@ SOURCES = {
         'bike_nhatrang','motohub_nhatrang','NhaTrang_moto_market','RentBikeUniq',
         'BK_rental','nha_trang_rent','RentTwentyTwo22NhaTrang'
     ],
-    'MARKET': ['vietnam_poputchiki','danang_mart','baraholka_niachang'],
-    'FUN':    ['MelomaniaMusicNT'],
-    'FOOD':   ['vietnam_food','danang_food','food_muine','food_nhatrang','phuquoc_food'],
-    'CHAT': [
-        'vietnam_chatt','vungtau_chat','dalat_forum','danang_forum','danang_expats',
-        'danang_woman','danang_chatik','kamran_chat','kuinen_chat','nhatrang_chatik',
-        'nhatrang_expats','phanthiet_chat','fukuok_chatik','hochiminh_chat','hanoi_chat'
-    ]
+    'FUN': ['MelomaniaMusicNT'],
 }
 
 STATS = {
@@ -81,38 +70,9 @@ def _dup(t):
     if len(_history) > 500: _history.pop(0)
     return False
 
-async def _join(client, name):
-    try:
-        return await client.get_input_entity(name)
-    except (ChannelPrivateError, UsernameInvalidError) as e:
-        raise Exception(f'приватный: {str(e)[:30]}')
-    except FloodWaitError as e:
-        log.warning(f'FloodWait {e.seconds}s для @{name}')
-        await asyncio.sleep(min(e.seconds + 3, 90))
-        return await client.get_input_entity(name)
-    except Exception:
-        pass
-    try:
-        await asyncio.sleep(2)
-        ent = await client.get_entity(name)
-        try:
-            await client(JoinChannelRequest(ent))
-            await asyncio.sleep(3)
-        except FloodWaitError as e:
-            log.warning(f'FloodWait join {e.seconds}s @{name}')
-            await asyncio.sleep(min(e.seconds + 3, 120))
-            await client(JoinChannelRequest(ent))
-            await asyncio.sleep(3)
-        return await client.get_input_entity(name)
-    except (ChannelPrivateError, UsernameInvalidError) as e:
-        raise Exception(f'приватный/не найден: {str(e)[:30]}')
-    except Exception as e:
-        raise Exception(f'ошибка: {str(e)[:40]}')
-
 async def _run(sess_str):
-    import time
     client = TelegramClient(StringSession(sess_str), API_ID, API_HASH,
-                            connection_retries=5, retry_delay=10)
+                            connection_retries=5, retry_delay=5)
     await client.connect()
 
     if not await client.is_user_authorized():
@@ -123,28 +83,53 @@ async def _run(sess_str):
     STATS['user'] = f'{me.first_name} (id={me.id})'
     STATS['started_at'] = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
     STATS['running'] = True
-    log.info(f'Telethon авторизован: {me.first_name} (id={me.id})')
+    log.info(f'Telethon: авторизован {me.first_name} (id={me.id})')
 
     all_ents = []
-    log.info('Подключение к каналам-источникам:')
+    log.info('Загружаю диалоги (один запрос вместо ResolveUsername для каждого канала):')
+    log.info('=' * 55)
+
+    # Загружаем все диалоги аккаунта одним запросом — без FloodWait по username
+    dialogs_map = {}  # username.lower() → InputChannel entity
+    try:
+        async for dialog in client.iter_dialogs():
+            chat = dialog.entity
+            un = getattr(chat, 'username', None)
+            if un:
+                dialogs_map[un.lower()] = dialog.input_entity
+        log.info(f'Диалогов загружено: {len(dialogs_map)}')
+    except Exception as ex:
+        log.warning(f'Ошибка загрузки диалогов: {ex}')
+
+    # Сопоставляем каналы из SOURCES с диалогами
     for grp, names in SOURCES.items():
         ok, fail = [], []
-        for i, n in enumerate(names):
-            try:
-                ent = await _join(client, n)
-                all_ents.append(ent)
+        for n in names:
+            key = n.lower()
+            if key in dialogs_map:
+                all_ents.append(dialogs_map[key])
                 ok.append(n)
-            except Exception as e:
-                fail.append(f'{n}: {str(e)[:40]}')
-            if i % 5 == 4:
-                await asyncio.sleep(3)
+            else:
+                # Пробуем get_input_entity только для неизвестных каналов
+                try:
+                    ent = await client.get_input_entity(n)
+                    all_ents.append(ent)
+                    ok.append(n)
+                    await asyncio.sleep(0.5)
+                except FloodWaitError as fw:
+                    log.warning(f'  ⏳ FloodWait {fw.seconds}s @{n} — пропускаем')
+                    fail.append(n)
+                except Exception as e:
+                    fail.append(n)
+                    log.debug(f'  ❌ @{n}: {str(e)[:60]}')
         STATS['connected'][grp] = ok
         STATS['failed'][grp] = fail
         STATS['forwarded'][grp] = {'messages': 0, 'photos': 0, 'albums': 0}
         log.info(f'  [{grp}] → @{DEST[grp]}: ✅{len(ok)}/{len(names)} | ❌{len(fail)}')
 
     total_ok = sum(len(v) for v in STATS['connected'].values())
-    log.info(f'Итого подключено: {total_ok} каналов. Слушаю сообщения...')
+    log.info('=' * 55)
+    log.info(f'Итого: {total_ok} каналов. Слушаю сообщения...')
 
     @client.on(events.NewMessage(chats=all_ents))
     async def on_msg(e):
@@ -161,7 +146,7 @@ async def _run(sess_str):
             STATS['forwarded'][grp]['photos'] += 1
             STATS['total_messages'] += 1
             STATS['total_photos'] += 1
-            log.info(f'📨 @{un}→@{DEST[grp]} | 📸1 | итого: {STATS["total_messages"]} сообщ/{STATS["total_photos"]} фото')
+            log.info(f'📨 @{un}→@{DEST[grp]} | 📸1 | итого: {STATS["total_messages"]} сообщ / {STATS["total_photos"]} фото')
         except Exception as ex:
             log.warning(f'Ошибка пересылки: {ex}')
 
@@ -180,29 +165,27 @@ async def _run(sess_str):
             STATS['forwarded'][grp]['albums'] += 1
             STATS['total_messages'] += 1
             STATS['total_photos'] += len(p)
-            STATS['total_albums'] = STATS.get('total_albums', 0) + 1
-            log.info(f'🖼️  @{un}→@{DEST[grp]} | 📸{len(p)} альб | итого: {STATS["total_messages"]}/{STATS["total_photos"]} фото')
+            log.info(f'🖼️  @{un}→@{DEST[grp]} | 📸{len(p)} альб | итого: {STATS["total_messages"]} / {STATS["total_photos"]} фото')
         except Exception as ex:
             log.warning(f'Ошибка альбома: {ex}')
 
     await client.run_until_disconnected()
 
 def start_forwarder(sess_str: str):
-    """Запустить в отдельном потоке с собственным event loop"""
     def _thread():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
             loop.run_until_complete(_run(sess_str))
         except AuthKeyDuplicatedError:
-            log.error('AuthKeyDuplicated: перезапустите приложение для повторной авторизации')
+            log.error('AuthKeyDuplicated — перезапустите приложение')
         except Exception as e:
-            log.error(f'Telethon forwarder упал: {e}')
+            log.error(f'Telethon forwarder ошибка: {e}')
         finally:
             STATS['running'] = False
             loop.close()
 
     t = threading.Thread(target=_thread, daemon=True, name='TelethonForwarder')
     t.start()
-    log.info('Telethon forwarder запущен в фоновом потоке')
+    log.info('Telethon forwarder поток запущен')
     return t

@@ -1,11 +1,10 @@
-import os, asyncio, re, uvicorn, difflib, time, json
+import os, asyncio, re, uvicorn, difflib, time
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.types import MessageMediaPhoto
-from telethon.tl.functions.channels import JoinChannelRequest
-from telethon.errors import FloodWaitError, ChannelPrivateError, UsernameInvalidError, AuthKeyDuplicatedError
+from telethon.errors import AuthKeyDuplicatedError
 
 app = FastAPI()
 
@@ -17,10 +16,7 @@ D = {
     'VIET': 'vietnamparsing',
     'THAI': 'thailandparsing',
     'BIKE': 'visaranvietnam',
-    'MARKET': 'baraholkainvietnam',
-    'FUN': 'razvlecheniyavietnam',
-    'FOOD': 'restoranvietnam',
-    'CHAT': 'obmenvietnam'
+    'FUN':  'razvlecheniyavietnam',
 }
 
 M = {
@@ -45,14 +41,7 @@ M = {
         'bike_nhatrang','motohub_nhatrang','NhaTrang_moto_market','RentBikeUniq',
         'BK_rental','nha_trang_rent','RentTwentyTwo22NhaTrang'
     ],
-    'MARKET': ['vietnam_poputchiki','danang_mart','baraholka_niachang'],
     'FUN': ['MelomaniaMusicNT'],
-    'FOOD': ['vietnam_food','danang_food','food_muine','food_nhatrang','phuquoc_food'],
-    'CHAT': [
-        'vietnam_chatt','vungtau_chat','dalat_forum','danang_forum','danang_expats',
-        'danang_woman','danang_chatik','kamran_chat','kuinen_chat','nhatrang_chatik',
-        'nhatrang_expats','phanthiet_chat','fukuok_chatik','hochiminh_chat','hanoi_chat'
-    ]
 }
 
 H = []
@@ -61,7 +50,6 @@ STATS = {
     'user': None,
     'connected_channels': {},
     'failed_channels': {},
-    'joined_channels': {},
     'forwarded': {},
     'total_messages': 0,
     'total_photos': 0,
@@ -71,11 +59,13 @@ STATS = {
 
 SETUP = {'client': None, 'code_hash': None, 'phone': None}
 
+
 def cl(t):
-    if not t: return ""
-    t = re.sub(r"t\.me/\S+|http\S+|#[A-Za-z0-9_а-яА-ЯёЁ]+|Источник:.*", "", t, flags=re.I)
+    if not t: return ''
+    t = re.sub(r't\.me/\S+|http\S+|#[A-Za-z0-9_а-яА-ЯёЁ]+|Источник:.*', '', t, flags=re.I)
     t = re.sub(r'[^\w\s.,!?:;()\-+=%№"\'/]', '', t)
-    return " ".join(t.split())
+    return ' '.join(t.split())
+
 
 def dup(t):
     if not t or len(t) < 20: return False
@@ -86,13 +76,15 @@ def dup(t):
     if len(H) > 500: H.pop(0)
     return False
 
+
 class StartReq(BaseModel):
     phone: str
 
 class VerifyReq(BaseModel):
     code: str
 
-@app.post("/setup/start")
+
+@app.post('/setup/start')
 async def setup_start(req: StartReq):
     try:
         c = TelegramClient(StringSession(), API_ID, API_HASH)
@@ -101,15 +93,16 @@ async def setup_start(req: StartReq):
         SETUP['client'] = c
         SETUP['code_hash'] = result.phone_code_hash
         SETUP['phone'] = req.phone
-        print(f"[SETUP] Код отправлен на {req.phone}")
-        return {"ok": True, "message": f"Код отправлен на {req.phone}"}
+        print(f'[SETUP] Код отправлен на {req.phone}')
+        return {'ok': True, 'message': f'Код отправлен на {req.phone}'}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.post("/setup/verify")
+
+@app.post('/setup/verify')
 async def setup_verify(req: VerifyReq):
     if not SETUP['client'] or not SETUP['code_hash']:
-        raise HTTPException(status_code=400, detail="Сначала вызовите /setup/start")
+        raise HTTPException(status_code=400, detail='Сначала вызовите /setup/start')
     try:
         c = SETUP['client']
         if not c.is_connected():
@@ -119,161 +112,121 @@ async def setup_verify(req: VerifyReq):
         session_str = c.session.save()
         await c.disconnect()
         SETUP['client'] = None
-        print(f"[SETUP] ✅ Сессия создана для {me.first_name}")
-        return {"ok": True, "user": me.first_name, "session": session_str,
-                "instruction": "Добавьте 'session' как секрет TELETHON_SESSION в настройках Space"}
+        print(f'[SETUP] ✅ Сессия создана для {me.first_name}')
+        return {'ok': True, 'user': me.first_name, 'session': session_str,
+                'instruction': 'Добавьте session как секрет TELETHON_SESSION в настройках Space'}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-async def join_and_get(client, name):
-    """Получить entity канала, при необходимости вступить"""
-    try:
-        return await client.get_input_entity(name)
-    except (ChannelPrivateError, UsernameInvalidError) as e:
-        raise Exception(f"недоступен: {str(e)[:35]}")
-    except FloodWaitError as e:
-        print(f"  ⏳ FloodWait {e.seconds}s перед @{name}")
-        await asyncio.sleep(min(e.seconds + 2, 60))
-        return await client.get_input_entity(name)
-    except Exception:
-        pass
-    try:
-        await asyncio.sleep(2)
-        entity = await client.get_entity(name)
-        try:
-            await client(JoinChannelRequest(entity))
-            await asyncio.sleep(3)
-        except FloodWaitError as e:
-            print(f"  ⏳ FloodWait join {e.seconds}s @{name}")
-            await asyncio.sleep(min(e.seconds + 2, 120))
-            await client(JoinChannelRequest(entity))
-            await asyncio.sleep(3)
-        return await client.get_input_entity(name)
-    except (ChannelPrivateError, UsernameInvalidError) as e:
-        raise Exception(f"приватный/не найден: {str(e)[:30]}")
-    except Exception as e:
-        raise Exception(f"join failed: {str(e)[:40]}")
 
 async def start_client():
     if not SESS:
-        print("⚠️  TELETHON_SESSION не задана. Используйте /setup/start → /setup/verify")
+        print('⚠️  TELETHON_SESSION не задана. Используйте /setup/start → /setup/verify')
         return
 
-    # Ждём чтобы старый контейнер успел завершить соединение
-    print("⏳ Пауза 15с перед подключением (ждём завершения старого контейнера)...")
-    await asyncio.sleep(15)
-
     for attempt in range(5):
-      try:
-        client = TelegramClient(StringSession(SESS), API_ID, API_HASH,
-                                connection_retries=3, retry_delay=5)
-        await client.connect()
+        try:
+            client = TelegramClient(StringSession(SESS), API_ID, API_HASH,
+                                    connection_retries=5, retry_delay=5)
+            await client.connect()
 
-        if not await client.is_user_authorized():
-            print("❌ Сессия невалидна!")
-            return
+            if not await client.is_user_authorized():
+                print('❌ Сессия невалидна!')
+                return
 
-        me = await client.get_me()
-        STATS['started_at'] = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
-        STATS['user'] = f"{me.first_name} (id={me.id})"
-        print(f"\n✅ Авторизован: {me.first_name} | ID: {me.id} (попытка {attempt+1})")
+            me = await client.get_me()
+            STATS['started_at'] = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
+            STATS['user'] = f'{me.first_name} (id={me.id})'
+            print(f'\n✅ Авторизован: {me.first_name} | ID: {me.id} (попытка {attempt+1})')
 
-        all_ents = []
-        print("\n📡 Подключение к каналам (с автовступлением):")
-        print("=" * 60)
+            all_ents = []
+            print('\n📡 Подключение к каналам (быстрый режим):')
+            print('=' * 55)
 
-        for grp, names in M.items():
-            ok, fail, joined = [], [], []
-            for i, n in enumerate(names):
+            for grp, names in M.items():
+                ok, fail = [], []
+                for n in names:
+                    try:
+                        ent = await client.get_input_entity(n)
+                        all_ents.append(ent)
+                        ok.append(n)
+                    except Exception as e:
+                        fail.append(n)
+                STATS['connected_channels'][grp] = ok
+                STATS['failed_channels'][grp] = fail
+                STATS['forwarded'][grp] = {'messages': 0, 'photos': 0, 'albums': 0}
+                print(f'  [{grp}] → @{D[grp]}: ✅{len(ok)}/{len(names)} | ❌{len(fail)}')
+
+            total_ok = sum(len(v) for v in STATS['connected_channels'].values())
+            print('=' * 55)
+            print(f'📊 Итого: {total_ok} каналов. Слушаю...\n')
+
+            @client.on(events.NewMessage(chats=all_ents))
+            async def h(e):
+                if e.grouped_id or not e.media or not isinstance(e.media, MessageMediaPhoto): return
+                t = e.raw_text or ''
+                if len(t) < 15 or dup(t): return
                 try:
-                    ent = await join_and_get(client, n)
-                    all_ents.append(ent)
-                    ok.append(n)
-                    # Пометить как joined если пришлось вступать
-                except Exception as e:
-                    if 'join failed' in str(e):
-                        fail.append(f"{n}({str(e)[-30:]})")
-                    else:
-                        fail.append(f"{n}({str(e)[:25]})")
-                # Небольшая пауза чтобы не получить flood
-                if i % 5 == 4:
-                    await asyncio.sleep(2)
+                    chat = await e.get_chat()
+                    un = chat.username.lower() if hasattr(chat, 'username') and chat.username else str(e.chat_id)
+                    grp = next((g for g, l in M.items() if any(x.lower() == un for x in l)), 'VIET')
+                    msg = f'Источник: @{un}\nСсылка: https://t.me/{un}/{e.id}\n\n{cl(t)}'
+                    await client.send_message(D[grp], msg[:1020], file=e.media, parse_mode=None)
+                    STATS['forwarded'][grp]['messages'] += 1
+                    STATS['forwarded'][grp]['photos'] += 1
+                    STATS['total_messages'] += 1
+                    STATS['total_photos'] += 1
+                    print(f'📨 @{un}→@{D[grp]} | 📸1 | итого:{STATS["total_messages"]} сообщ/{STATS["total_photos"]} фото')
+                except Exception as ex:
+                    print(f'⚠️  Ошибка: {ex}')
 
-            STATS['connected_channels'][grp] = ok
-            STATS['failed_channels'][grp] = fail
-            STATS['forwarded'][grp] = {'messages': 0, 'photos': 0, 'albums': 0}
-            dest = D[grp]
-            print(f"  [{grp}] → @{dest}: ✅{len(ok)}/{len(names)}")
-            if fail:
-                print(f"    ❌ {', '.join([f.split('(')[0] for f in fail[:3]])}{'...' if len(fail)>3 else ''}")
+            @client.on(events.Album(chats=all_ents))
+            async def ha(e):
+                p = [m for m in e.messages if isinstance(m.media, MessageMediaPhoto)]
+                if not p or dup(e.text): return
+                try:
+                    chat = await e.get_chat()
+                    un = chat.username.lower() if hasattr(chat, 'username') and chat.username else str(e.chat_id)
+                    grp = next((g for g, l in M.items() if any(x.lower() == un for x in l)), 'VIET')
+                    msg = f'Источник: @{un}\nСсылка: https://t.me/{un}/{e.messages[0].id}\n\n{cl(e.text)}'
+                    await client.send_message(D[grp], msg[:1020], file=p, parse_mode=None)
+                    STATS['forwarded'][grp]['messages'] += 1
+                    STATS['forwarded'][grp]['photos'] += len(p)
+                    STATS['forwarded'][grp]['albums'] += 1
+                    STATS['total_messages'] += 1
+                    STATS['total_photos'] += len(p)
+                    print(f'🖼️  @{un}→@{D[grp]} | 📸{len(p)} альб | итого:{STATS["total_messages"]}/{STATS["total_photos"]} фото')
+                except Exception as ex:
+                    print(f'⚠️  Ошибка альбом: {ex}')
 
-        total_ok = sum(len(v) for v in STATS['connected_channels'].values())
-        total_all = sum(len(v) for v in M.values())
-        print("=" * 60)
-        print(f"📊 Итого: {total_ok}/{total_all} каналов подключено. Слушаю...\n")
+            await client.run_until_disconnected()
+            break
 
-        @client.on(events.NewMessage(chats=all_ents))
-        async def h(e):
-            if e.grouped_id or not e.media or not isinstance(e.media, MessageMediaPhoto): return
-            t = e.raw_text or ""
-            if len(t) < 15 or dup(t): return
-            try:
-                chat = await e.get_chat()
-                un = chat.username.lower() if hasattr(chat, 'username') and chat.username else str(e.chat_id)
-                reg = next((r for r, l in M.items() if any(x.lower() == un for x in l)), 'VIET')
-                msg = f"Источник: @{un}\nСсылка: https://t.me/{un}/{e.id}\n\n{cl(t)}"
-                await client.send_message(D[reg], msg[:1020], file=e.media, parse_mode=None)
-                STATS['forwarded'][reg]['messages'] += 1
-                STATS['forwarded'][reg]['photos'] += 1
-                STATS['total_messages'] += 1
-                STATS['total_photos'] += 1
-                print(f"📨 @{un}→@{D[reg]} | 📸1 | итого:{STATS['total_messages']} сообщ/{STATS['total_photos']} фото")
-            except Exception as ex:
-                print(f"⚠️  Ошибка: {ex}")
+        except AuthKeyDuplicatedError:
+            wait = 40 * (attempt + 1)
+            print(f'⚠️  AuthKeyDuplicated (попытка {attempt+1}/5). Жду {wait}с...')
+            try: await client.disconnect()
+            except: pass
+            await asyncio.sleep(wait)
+        except Exception as ex:
+            print(f'❌ Критическая ошибка: {ex}')
+            break
 
-        @client.on(events.Album(chats=all_ents))
-        async def ha(e):
-            p = [m for m in e.messages if isinstance(m.media, MessageMediaPhoto)]
-            if not p or dup(e.text): return
-            try:
-                chat = await e.get_chat()
-                un = chat.username.lower() if hasattr(chat, 'username') and chat.username else str(e.chat_id)
-                reg = next((r for r, l in M.items() if any(x.lower() == un for x in l)), 'VIET')
-                msg = f"Источник: @{un}\nСсылка: https://t.me/{un}/{e.messages[0].id}\n\n{cl(e.text)}"
-                await client.send_message(D[reg], msg[:1020], file=p, parse_mode=None)
-                STATS['forwarded'][reg]['messages'] += 1
-                STATS['forwarded'][reg]['photos'] += len(p)
-                STATS['forwarded'][reg]['albums'] += 1
-                STATS['total_messages'] += 1
-                STATS['total_photos'] += len(p)
-                STATS['total_albums'] += 1
-                print(f"🖼️  @{un}→@{D[reg]} | 📸{len(p)} (альбом) | итого:{STATS['total_messages']}/{STATS['total_photos']} фото")
-            except Exception as ex:
-                print(f"⚠️  Ошибка альбом: {ex}")
 
-        await client.run_until_disconnected()
-        break  # нормальное завершение
-      except AuthKeyDuplicatedError:
-        wait = 30 * (attempt + 1)
-        print(f"⚠️  AuthKeyDuplicated (попытка {attempt+1}/5). Жду {wait}с и переподключаюсь...")
-        try: await client.disconnect()
-        except: pass
-        await asyncio.sleep(wait)
-      except Exception as ex:
-        print(f"❌ Критическая ошибка: {ex}")
-        break
-
-@app.on_event("startup")
+@app.on_event('startup')
 async def sup():
     asyncio.create_task(start_client())
 
-@app.get("/")
-async def root():
-    return {"status": "ok", "session": "configured" if SESS else "not_configured"}
 
-@app.get("/stats")
+@app.get('/')
+async def root():
+    return {'status': 'ok', 'session': 'configured' if SESS else 'not_configured'}
+
+
+@app.get('/stats')
 async def stats():
     return STATS
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=7860)
+
+if __name__ == '__main__':
+    uvicorn.run(app, host='0.0.0.0', port=7860)
