@@ -5963,12 +5963,12 @@
             let _a = Array.isArray(item.all_images) ? item.all_images : [];
             let images = [...new Set([..._p, ..._a])];
             if (category === 'real_estate') {
-                // Только t.me ссылки наших каналов
                 images = images.filter(url => url && typeof url === 'string' &&
-                    /^https:\/\/t\.me\/(vietnamparsing|thailandparsing)\/\d+$/.test(url));
+                    (/^https:\/\/t\.me\/(vietnamparsing|thailandparsing)\/\d+$/.test(url) || url.includes('telesco.pe')));
                 images = images.map(url => {
                     const tmeMatch = url.match(/^https:\/\/t\.me\/([^\/]+)\/(\d+)$/);
-                    return tmeMatch ? `/tg_img/${tmeMatch[1]}/${tmeMatch[2]}` : null;
+                    if (tmeMatch) return `/tg_img/${tmeMatch[1]}/${tmeMatch[2]}`;
+                    return url;
                 }).filter(Boolean);
             } else {
                 if (images.length === 0) {
@@ -8321,10 +8321,11 @@
                         let images = [...new Set([..._p2, ..._a2])];
                         if (category === 'real_estate' || category === 'realestate') {
                             images = images.filter(url => url && typeof url === 'string' &&
-                                /^https:\/\/t\.me\/(vietnamparsing|thailandparsing)\/\d+$/.test(url));
+                                (/^https:\/\/t\.me\/(vietnamparsing|thailandparsing)\/\d+$/.test(url) || url.includes('telesco.pe')));
                             images = images.map(url => {
                                 const tmeMatch = url.match(/^https:\/\/t\.me\/([^\/]+)\/(\d+)$/);
-                                return tmeMatch ? `/tg_img/${tmeMatch[1]}/${tmeMatch[2]}` : null;
+                                if (tmeMatch) return `/tg_img/${tmeMatch[1]}/${tmeMatch[2]}`;
+                                return url;
                             }).filter(Boolean);
                         } else {
                             if (images.length === 0) {
