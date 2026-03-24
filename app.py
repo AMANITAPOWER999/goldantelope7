@@ -2886,6 +2886,15 @@ def _save_tg_photo_cache(cache):
 
 _tg_photo_cache = _load_tg_photo_cache()
 
+@app.route('/tg_file/<path:file_id>')
+def tg_file_proxy(file_id):
+    """Redirect to actual Telegram photo URL by file_id."""
+    url = get_telegram_photo_url(file_id)
+    if url:
+        return Response(status=302, headers={'Location': url, 'Cache-Control': 'public, max-age=3000'})
+    return Response(status=404)
+
+
 @app.route('/tg_img/<channel>/<int:post_id>')
 def tg_photo_proxy(channel, post_id):
     """Extract real CDN image URL from Telegram og:image and redirect browser to it."""
