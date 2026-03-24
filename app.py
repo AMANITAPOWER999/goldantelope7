@@ -4801,9 +4801,15 @@ def internal_git_push():
     token = os.environ.get('GITHUB_TOKEN', '')
     if not token:
         return jsonify({'error': 'no token'}), 400
-    remote = f'https://x-access-token:{token}@github.com/AMANITAPOWER999/goldantelope7.git'
     base = os.path.dirname(os.path.abspath(__file__))
-    env = dict(os.environ, GIT_TERMINAL_PROMPT='0', GIT_ASKPASS='/bin/true',
+    import tempfile, stat
+    tmpdir = tempfile.mkdtemp()
+    netrc_path = os.path.join(tmpdir, '.netrc')
+    with open(netrc_path, 'w') as f:
+        f.write(f'machine github.com login x-access-token password {token}\n')
+    os.chmod(netrc_path, stat.S_IRUSR | stat.S_IWUSR)
+    env = dict(os.environ, GIT_TERMINAL_PROMPT='0',
+               HOME=tmpdir,
                GIT_AUTHOR_NAME='GoldAntelope Bot', GIT_AUTHOR_EMAIL='bot@goldantelope.app',
                GIT_COMMITTER_NAME='GoldAntelope Bot', GIT_COMMITTER_EMAIL='bot@goldantelope.app')
     # Remove stale lock files
@@ -4816,8 +4822,8 @@ def internal_git_push():
         return r.stdout.strip() + r.stderr.strip()
     out = []
     out.append(run(['git', 'add', '-A']))
-    out.append(run(['git', 'commit', '-m', 'Eager loading for all slider images; fix lazy-slider in both renders']))
-    out.append(run(['git', 'push', remote, 'master']))
+    out.append(run(['git', 'commit', '--allow-empty', '-m', 'Eager loading for all slider images; fix lazy-slider in both renders']))
+    out.append(run(['git', 'push', 'origin', 'master']))
     return jsonify({'output': out})
 
 
