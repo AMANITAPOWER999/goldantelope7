@@ -3962,6 +3962,129 @@ def thailand_auth_verify():
         return jsonify({'error': str(e)}), 500
 
 
+# --- StringSession Generator for Globalparsing HF Space ---
+_gp_auth_state = {}
+_GP_API_ID = 32881984
+_GP_API_HASH = 'd2588f09dfbc5103ef77ef21c07dbf8b'
+
+
+@app.route('/api/admin/gen-session-start', methods=['POST'])
+def gen_session_start():
+    global _gp_auth_state
+    data_req = request.json or {}
+    password = data_req.get('password', '')
+    phone = data_req.get('phone', '').strip()
+    is_valid, _ = check_admin_password(password)
+    if not is_valid:
+        return jsonify({'error': 'Unauthorized'}), 401
+    if not phone:
+        return jsonify({'error': 'Введите номер телефона'}), 400
+
+    from telethon import TelegramClient
+    from telethon.sessions import StringSession
+
+    async def _send():
+        client = TelegramClient(StringSession(), _GP_API_ID, _GP_API_HASH)
+        await client.connect()
+        result = await client.send_code_request(phone)
+        session_str = client.session.save()
+        await client.disconnect()
+        return result.phone_code_hash, session_str
+
+    try:
+        phone_code_hash, session_str = _run_async_in_thread(_send())
+        _gp_auth_state['phone'] = phone
+        _gp_auth_state['phone_code_hash'] = phone_code_hash
+        _gp_auth_state['session_str'] = session_str
+        return jsonify({'success': True, 'message': f'Код отправлен на {phone}'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/gen-session-verify', methods=['POST'])
+def gen_session_verify():
+    global _gp_auth_state
+    data_req = request.json or {}
+    password = data_req.get('password', '')
+    code = data_req.get('code', '').strip()
+    is_valid, _ = check_admin_password(password)
+    if not is_valid:
+        return jsonify({'error': 'Unauthorized'}), 401
+    if not code:
+        return jsonify({'error': 'Введите код'}), 400
+    if not _gp_auth_state.get('phone_code_hash'):
+        return jsonify({'error': 'Сначала запросите код (шаг 1)'}), 400
+
+    from telethon import TelegramClient
+    from telethon.sessions import StringSession
+
+    phone = _gp_auth_state['phone']
+    phone_code_hash = _gp_auth_state['phone_code_hash']
+    session_str = _gp_auth_state['session_str']
+
+    async def _verify():
+        client = TelegramClient(StringSession(session_str), _GP_API_ID, _GP_API_HASH)
+        await client.connect()
+        await client.sign_in(phone, code, phone_code_hash=phone_code_hash)
+        me = await client.get_me()
+        final_session = client.session.save()
+        await client.disconnect()
+        return me.first_name, me.username, final_session
+
+    try:
+        first_name, username, final_session = _run_async_in_thread(_verify())
+        _gp_auth_state.clear()
+        return jsonify({
+            'success': True,
+            'message': f'Авторизован как {first_name} (@{username})',
+            'session': final_session
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/gen-session')
+def gen_session_page():
+    return '''<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Генератор сессии Globalparsing</title>
+<style>body{font-family:sans-serif;max-width:500px;margin:40px auto;padding:20px}
+input{width:100%;padding:10px;margin:8px 0;box-sizing:border-box;border:1px solid #ccc;border-radius:4px}
+button{background:#2563eb;color:#fff;border:none;padding:12px 24px;border-radius:4px;cursor:pointer;width:100%}
+.result{background:#f0fdf4;border:1px solid #86efac;padding:16px;border-radius:4px;margin-top:16px;word-break:break-all}
+.error{background:#fef2f2;border:1px solid #fca5a5;padding:16px;border-radius:4px;margin-top:16px}
+</style></head><body>
+<h2>🔑 Генератор Telethon сессии</h2>
+<p>Для деплоя <b>Globalparsing</b> на HuggingFace Space</p>
+<input id="pwd" type="password" placeholder="Пароль администратора">
+<hr>
+<h3>Шаг 1: Запросить код</h3>
+<input id="phone" type="text" placeholder="Номер телефона (+79...)" value="+">
+<button onclick="step1()">Отправить код</button>
+<div id="msg1"></div>
+<h3>Шаг 2: Подтвердить код</h3>
+<input id="code" type="text" placeholder="Код из Telegram">
+<button onclick="step2()">Получить сессию</button>
+<div id="msg2"></div>
+<script>
+async function step1(){
+    const r=await fetch('/api/admin/gen-session-start',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({password:document.getElementById('pwd').value,phone:document.getElementById('phone').value})});
+    const d=await r.json();
+    document.getElementById('msg1').innerHTML=d.success?'<div class="result">✅ '+d.message+'</div>':'<div class="error">❌ '+d.error+'</div>';
+}
+async function step2(){
+    const r=await fetch('/api/admin/gen-session-verify',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({password:document.getElementById('pwd').value,code:document.getElementById('code').value})});
+    const d=await r.json();
+    if(d.success){
+        document.getElementById('msg2').innerHTML='<div class="result"><b>✅ '+d.message+'</b><br><br><b>TELETHON_SESSION:</b><br><code>'+d.session+'</code><br><br>Скопируйте это значение и добавьте в секреты HuggingFace Space!</div>';
+    } else {
+        document.getElementById('msg2').innerHTML='<div class="error">❌ '+d.error+'</div>';
+    }
+}
+</script></body></html>'''
+
+
 @app.route('/api/admin/thailand-fetch-history', methods=['POST'])
 def thailand_fetch_history():
     data_req = request.json or {}
