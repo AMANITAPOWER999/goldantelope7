@@ -25,7 +25,7 @@ EXTRA_CHANNELS = {
     'hsjsbkskbs':           ('marketplace', None),  # same supergroup
     'razvlecheniyavietnam': ('entertainment', None),
     'restoranvietnam':      ('restaurants', None),
-    'obmenvietnam':         ('money_exchange', None),
+    'obmenvietnam':         ('chat', None),
 }
 
 LISTINGS_FILE = 'listings_vietnam.json'
