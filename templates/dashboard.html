@@ -5971,11 +5971,9 @@
                     return url;
                 }).filter(Boolean);
             } else {
-                // For restaurants: tg_file_ids → actual photos; fallback to first msg_id
-                if (category === 'restaurants' && Array.isArray(item.tg_file_ids) && item.tg_file_ids.length > 0) {
-                    images = item.tg_file_ids.map(fid => `/tg_file/${fid}`);
-                } else if (category === 'restaurants' && Array.isArray(item.photo_msg_ids) && item.photo_msg_ids.length > 0) {
-                    images = [`/tg_img/restoranvietnam/${item.photo_msg_ids[0]}`];
+                // For restaurants: use all Telegram message links via /tg_img/ proxy (full slider)
+                if (category === 'restaurants' && Array.isArray(item.photo_msg_ids) && item.photo_msg_ids.length > 0) {
+                    images = item.photo_msg_ids.map(mid => `/tg_img/restoranvietnam/${mid}`);
                 } else {
                     if (images.length === 0) {
                         if (item.image_url && !item.image_url.startsWith('tg_file:')) images.push(item.image_url);
