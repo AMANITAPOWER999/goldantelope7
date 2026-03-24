@@ -17,6 +17,17 @@ BOT_TOKEN = os.environ.get('VIETNAMPARSING_BOT_TOKEN', '')
 SOURCE_CHANNEL = 'vietnamparsing'
 ARENDABAY_CHANNEL = 'arendabaykavietnam'
 BARAHOLKA_GROUP = 'hsjsbkskbs'  # supergroup @hsjsbkskbs = baraholkainvietnam
+
+# Extra channels: username -> (category, transport_type or subcategory)
+EXTRA_CHANNELS = {
+    'visaranvietnam':       ('transport', 'bikes'),
+    'baraholkainvietnam':   ('marketplace', None),
+    'hsjsbkskbs':           ('marketplace', None),  # same supergroup
+    'razvlecheniyavietnam': ('entertainment', None),
+    'restoranvietnam':      ('restaurants', None),
+    'obmenvietnam':         ('money_exchange', None),
+}
+
 LISTINGS_FILE = 'listings_vietnam.json'
 INITIAL_FETCH_LIMIT = 200
 POLL_INTERVAL = 60
@@ -702,6 +713,192 @@ def fetch_arendabay_history(data: dict, existing_ids: set, max_msgs: int = 200) 
     return new_count
 
 
+def build_generic_listing(msg: dict, item_id: str, channel: str, category: str, subcategory=None) -> dict | None:
+    """Build a listing item from any extra channel post."""
+    text = msg.get('text', '') or msg.get('caption', '') or ''
+    if not text and not msg.get('images'):
+        return None
+
+    date_str = msg.get('date', datetime.now(timezone.utc).isoformat())
+    photos = msg.get('images') or []
+    msg_id = msg.get('post_id', 0)
+
+    lines = [l.strip() for l in text.strip().splitlines() if l.strip()]
+    title = lines[0][:120] if lines else 'Без названия'
+    description = '\n'.join(lines[1:]) if len(lines) > 1 else text[:300]
+
+    price_display = ''
+    price = 0
+    price_match = re.search(r'(\d[\d\s,.]*)\s*(?:₫|VND|vnd|usd|USD|\$|€|EUR|฿|THB)', text, re.IGNORECASE)
+    if price_match:
+        price_display = price_match.group(0)
+        try:
+            price = int(re.sub(r'[\s,.]', '', price_match.group(1)))
+        except Exception:
+            pass
+
+    tg_link = f'https://t.me/{channel}/{msg_id}' if msg_id else f'https://t.me/{channel}'
+
+    item: dict = {
+        'id': item_id,
+        'title': title,
+        'description': description,
+        'text': text,
+        'price': price,
+        'price_display': price_display,
+        'city': 'Вьетнам',
+        'city_ru': 'Вьетнам',
+        'date': date_str,
+        'contact': f'@{channel}',
+        'contact_name': channel,
+        'source_group': channel,
+        'telegram': f'https://t.me/{channel}',
+        'telegram_link': tg_link,
+        'image_url': photos[0] if photos else '',
+        'all_images': photos,
+        'photos': photos,
+        'status': 'active',
+        'country': 'vietnam',
+        'message_id': msg_id,
+        'has_media': bool(photos),
+        'category': category,
+    }
+
+    if category == 'transport':
+        item['transport_type'] = subcategory or 'bikes'
+        item['listing_type'] = 'transport'
+    elif category == 'marketplace':
+        item['marketplace_category'] = subcategory or 'other'
+        item['whatsapp'] = ''
+    elif category == 'entertainment':
+        item['listing_type'] = 'entertainment'
+    elif category == 'restaurants':
+        item['location'] = ''
+        item['source'] = f'https://t.me/{channel}'
+        item['whatsapp'] = ''
+        item['images'] = photos
+
+    return item
+
+
+def process_extra_channel_update(update: dict, channel: str, category: str, subcategory=None,
+                                 override_photos=None) -> dict | None:
+    """Process a Bot API update from an extra channel into a listing."""
+    post = update.get('channel_post') or update.get('message') or {}
+    chat_username = post.get('chat', {}).get('username', '').lower()
+    if chat_username not in (channel.lower(), EXTRA_CHANNELS and channel.lower()):
+        pass  # accept anyway; already filtered upstream
+
+    msg_id = post.get('message_id', 0)
+    text = post.get('text') or post.get('caption') or ''
+    if not text.strip():
+        return None
+
+    date_ts = post.get('date', 0)
+    date_str = datetime.fromtimestamp(date_ts, tz=timezone.utc).isoformat() if date_ts else datetime.now(timezone.utc).isoformat()
+
+    if override_photos:
+        photos = override_photos
+    else:
+        url = _extract_largest_photo_url(post)
+        photos = [url] if url else []
+
+    item_id = f"{channel}_{msg_id}"
+    msg_data = {
+        'post_id': msg_id,
+        'date': date_str,
+        'text': text,
+        'caption': post.get('caption', ''),
+        'images': photos,
+    }
+    return build_generic_listing(msg_data, item_id, channel, category, subcategory)
+
+
+def scrape_extra_channel_page(channel: str, before_id: int | None = None) -> list[dict]:
+    """Scrape posts from t.me/s/<channel>. Returns list of raw msg dicts."""
+    url = f'https://t.me/s/{channel}'
+    params = {}
+    if before_id:
+        params['before'] = before_id
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/115.0'}
+        resp = requests.get(url, params=params, headers=headers, timeout=15)
+        resp.raise_for_status()
+        html = resp.text
+    except Exception as e:
+        logger.warning(f"[{channel}] scrape error: {e}")
+        return []
+
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, 'html.parser')
+    messages = soup.find_all('div', class_='tgme_widget_message_wrap')
+    results = []
+    for wrap in messages:
+        try:
+            msg_div = wrap.find('div', class_='tgme_widget_message')
+            if not msg_div:
+                continue
+            data_post = msg_div.get('data-post', '')
+            post_id = 0
+            if '/' in data_post:
+                try:
+                    post_id = int(data_post.split('/')[-1])
+                except Exception:
+                    pass
+
+            text_div = wrap.find('div', class_='tgme_widget_message_text')
+            text = text_div.get_text('\n', strip=True) if text_div else ''
+
+            date_tag = wrap.find('time')
+            date_str = date_tag.get('datetime', '') if date_tag else ''
+
+            photos = []
+            for img in wrap.find_all('a', class_='tgme_widget_message_photo_wrap'):
+                style = img.get('style', '')
+                m = re.search(r"url\('([^']+)'\)", style)
+                if m:
+                    photos.append(m.group(1))
+
+            results.append({
+                'post_id': post_id,
+                'text': text,
+                'date': date_str,
+                'images': photos,
+            })
+        except Exception:
+            continue
+    return results
+
+
+def fetch_extra_channel_history(channel: str, category: str, subcategory,
+                                data: dict, existing_ids: set, max_pages: int = 3) -> int:
+    """Fetch historical posts from an extra channel and add to data."""
+    new_count = 0
+    if category not in data:
+        data[category] = []
+    try:
+        before_id = None
+        for _ in range(max_pages):
+            msgs = scrape_extra_channel_page(channel, before_id)
+            if not msgs:
+                break
+            for msg in msgs:
+                item_id = f"{channel}_{msg['post_id']}"
+                if item_id in existing_ids:
+                    continue
+                item = build_generic_listing(msg, item_id, channel, category, subcategory)
+                if item is None:
+                    continue
+                data[category].insert(0, item)
+                existing_ids.add(item_id)
+                new_count += 1
+            before_id = min(m['post_id'] for m in msgs if m['post_id'])
+            time.sleep(0.5)
+    except Exception as e:
+        logger.warning(f"[{channel}] history fetch error: {e}")
+    return new_count
+
+
 def load_listings() -> dict:
     try:
         with open(LISTINGS_FILE, 'r', encoding='utf-8') as f:
@@ -890,6 +1087,24 @@ def run_initial_fetch():
             logger.info(f"Fetched {ab_count} transport/bikes from @{ARENDABAY_CHANNEL}")
     except Exception as e:
         logger.warning(f"Arendabay history fetch error: {e}")
+
+    # Fetch history from extra channels
+    EXTRA_PUBLIC_CHANNELS = {
+        k: v for k, v in EXTRA_CHANNELS.items()
+        if k not in ('hsjsbkskbs',)  # skip private supergroup aliases
+    }
+    for ch, (cat, subcat) in EXTRA_PUBLIC_CHANNELS.items():
+        try:
+            ex_data = load_listings()
+            ex_ids = get_existing_ids(ex_data)
+            n = fetch_extra_channel_history(ch, cat, subcat, ex_data, ex_ids, max_pages=2)
+            if n > 0:
+                save_listings(ex_data)
+                count += n
+                logger.info(f"Fetched {n} [{cat}] items from @{ch}")
+        except Exception as e_ex:
+            logger.warning(f"[{ch}] history fetch error: {e_ex}")
+
     _parser_state['total_parsed'] = count
     _parser_state['new_today'] = count
     _parser_state['last_run'] = datetime.now(timezone.utc).isoformat()
@@ -897,21 +1112,24 @@ def run_initial_fetch():
     logger.info("Switched to monitoring mode.")
 
 
-def _group_media_updates(updates: list) -> tuple[list, list, list]:
-    """Split updates into (vietnam_items, thailand_updates, arendabay_items).
+def _group_media_updates(updates: list) -> tuple[list, list, list, dict]:
+    """Split updates into (vietnam_items, thailand_updates, arendabay_items, extra_items).
 
     Returns:
       vietnam_items: list of (update, override_photos) tuples for @vietnamparsing
       thailand_updates: list of raw updates from @thailandparsing
       arendabay_items: list of (update, override_photos) tuples for @arendabaykavietnam
+      extra_items: dict of channel -> list of (update, override_photos) for EXTRA_CHANNELS
     """
     from collections import OrderedDict
 
     thailand_updates = []
     media_groups: dict = OrderedDict()
     arendabay_media_groups: dict = OrderedDict()
+    extra_media_groups: dict = {}  # channel -> OrderedDict of mgid -> group
     singles = []
     arendabay_singles = []
+    extra_singles: dict = {}  # channel -> list of (upd, None)
 
     for upd in updates:
         post = upd.get('channel_post') or upd.get('message') or {}
@@ -940,22 +1158,47 @@ def _group_media_updates(updates: list) -> tuple[list, list, list]:
                 arendabay_singles.append((upd, None))
             continue
 
-        mgid = post.get('media_group_id')
-        if mgid:
-            if mgid not in media_groups:
-                media_groups[mgid] = {'main': upd, 'all_updates': []}
+        if chat_username in EXTRA_CHANNELS:
+            ch = chat_username
+            mgid = post.get('media_group_id')
+            if mgid:
+                if ch not in extra_media_groups:
+                    extra_media_groups[ch] = OrderedDict()
+                if mgid not in extra_media_groups[ch]:
+                    extra_media_groups[ch][mgid] = {'main': upd, 'all_updates': []}
+                else:
+                    caption = post.get('caption') or post.get('text', '')
+                    existing_main_post = (
+                        extra_media_groups[ch][mgid]['main'].get('channel_post')
+                        or extra_media_groups[ch][mgid]['main'].get('message') or {}
+                    )
+                    existing_has_text = existing_main_post.get('caption') or existing_main_post.get('text')
+                    if caption and not existing_has_text:
+                        extra_media_groups[ch][mgid]['main'] = upd
+                extra_media_groups[ch][mgid]['all_updates'].append(upd)
             else:
-                caption = post.get('caption') or post.get('text', '')
-                existing_main_post = (
-                    media_groups[mgid]['main'].get('channel_post')
-                    or media_groups[mgid]['main'].get('message') or {}
-                )
-                existing_has_text = existing_main_post.get('caption') or existing_main_post.get('text')
-                if caption and not existing_has_text:
-                    media_groups[mgid]['main'] = upd
-            media_groups[mgid]['all_updates'].append(upd)
-        else:
-            singles.append((upd, None))
+                if ch not in extra_singles:
+                    extra_singles[ch] = []
+                extra_singles[ch].append((upd, None))
+            continue
+
+        if chat_username == 'vietnamparsing':
+            mgid = post.get('media_group_id')
+            if mgid:
+                if mgid not in media_groups:
+                    media_groups[mgid] = {'main': upd, 'all_updates': []}
+                else:
+                    caption = post.get('caption') or post.get('text', '')
+                    existing_main_post = (
+                        media_groups[mgid]['main'].get('channel_post')
+                        or media_groups[mgid]['main'].get('message') or {}
+                    )
+                    existing_has_text = existing_main_post.get('caption') or existing_main_post.get('text')
+                    if caption and not existing_has_text:
+                        media_groups[mgid]['main'] = upd
+                media_groups[mgid]['all_updates'].append(upd)
+            else:
+                singles.append((upd, None))
 
     # Build override_photos for each Vietnam media group
     vietnam_items = list(singles)
@@ -998,7 +1241,26 @@ def _group_media_updates(updates: list) -> tuple[list, list, list]:
                     all_photos.append(url)
             arendabay_items.append((grp['main'], all_photos if all_photos else None))
 
-    return vietnam_items, thailand_updates, arendabay_items
+    # Build extra_items: channel -> list of (upd, override_photos)
+    extra_items: dict = {}
+    for ch, singles_list in extra_singles.items():
+        extra_items[ch] = list(singles_list)
+    for ch, mg_dict in extra_media_groups.items():
+        if ch not in extra_items:
+            extra_items[ch] = []
+        for mgid, grp in mg_dict.items():
+            grp['all_updates'].sort(
+                key=lambda u: (u.get('channel_post') or u.get('message') or {}).get('message_id', 0)
+            )
+            all_photos = []
+            for upd in grp['all_updates']:
+                post = upd.get('channel_post') or upd.get('message') or {}
+                url = _extract_largest_photo_url(post)
+                if url and url not in all_photos:
+                    all_photos.append(url)
+            extra_items[ch].append((grp['main'], all_photos if all_photos else None))
+
+    return vietnam_items, thailand_updates, arendabay_items, extra_items
 
 
 def _scrape_new_from_tme(existing_ids: set, data: dict) -> int:
@@ -1085,7 +1347,7 @@ def run_monitoring_loop():
                 existing_ids = get_existing_ids(data)
                 new_count = 0
 
-                vietnam_items, thailand_updates, arendabay_items = _group_media_updates(updates)
+                vietnam_items, thailand_updates, arendabay_items, extra_items = _group_media_updates(updates)
 
                 for upd, override_photos in vietnam_items:
                     item = process_bot_update(upd, override_photos=override_photos)
@@ -1114,6 +1376,23 @@ def run_monitoring_loop():
                     new_count += 1
                     n_photos = len(item.get('all_images') or item.get('photos') or [])
                     logger.info(f"New BIKES: [{item['city']}] {item['title'][:60]} | {n_photos} photo(s)")
+
+                for ch, upd_list in extra_items.items():
+                    category, subcategory = EXTRA_CHANNELS.get(ch, (None, None))
+                    if not category:
+                        continue
+                    for upd, override_photos in upd_list:
+                        item = process_extra_channel_update(upd, ch, category, subcategory, override_photos)
+                        if not item:
+                            continue
+                        if item['id'] in existing_ids:
+                            continue
+                        if category not in data:
+                            data[category] = []
+                        data[category].insert(0, item)
+                        existing_ids.add(item['id'])
+                        new_count += 1
+                        logger.info(f"New [{category}] from @{ch}: {item['title'][:60]}")
 
                 if new_count > 0:
                     save_listings(data)
