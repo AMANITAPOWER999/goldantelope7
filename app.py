@@ -4833,7 +4833,13 @@ def internal_git_push():
     def run(cmd):
         r = _sp.run(cmd, cwd=base, capture_output=True, text=True, env=env)
         return r.stdout.strip() + r.stderr.strip()
+    # First: test token via GitHub API
+    import requests as _req
+    gh_resp = _req.get('https://api.github.com/user', headers={'Authorization': f'Bearer {token}', 'User-Agent': 'GoldAntelope'}, timeout=10)
+    gh_info = gh_resp.json()
+
     out = []
+    out.append(f'GitHub API /user: {gh_resp.status_code} login={gh_info.get("login")}')
     out.append(run(['git', 'add', '-A']))
     out.append(run(['git', 'commit', '--allow-empty', '-m', 'Eager loading for all slider images; fix lazy-slider in both renders']))
     out.append(run(['git', 'push', 'origin', 'master']))
