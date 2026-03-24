@@ -4798,52 +4798,33 @@ def api_post_restaurants_status():
 @app.route('/internal/git_push', methods=['POST'])
 def internal_git_push():
     import subprocess as _sp
-    token = os.environ.get('GITHUB_TOKEN', '')
-    if not token:
-        return jsonify({'error': 'no token'}), 400
     base = os.path.dirname(os.path.abspath(__file__))
-    import tempfile, stat
-    tmpdir = tempfile.mkdtemp()
-    netrc_path = os.path.join(tmpdir, '.netrc')
-    with open(netrc_path, 'w') as f:
-        f.write(f'machine github.com login x-access-token password {token}\n')
-    os.chmod(netrc_path, stat.S_IRUSR | stat.S_IWUSR)
-    # Write askpass script that returns the token as password
-    askpass_path = os.path.join(tmpdir, 'askpass.sh')
-    with open(askpass_path, 'w') as f:
-        f.write(f'#!/bin/sh\ncase "$1" in\n  *[Pp]assword*) echo \'{token}\' ;;\n  *) echo \'x-access-token\' ;;\nesac\n')
-    os.chmod(askpass_path, stat.S_IRWXU)
-    env = dict(os.environ)
-    env['GIT_TERMINAL_PROMPT'] = '0'
-    env['HOME'] = tmpdir
-    env['GIT_ASKPASS'] = askpass_path
-    env['SSH_ASKPASS'] = askpass_path
-    env['GIT_AUTHOR_NAME'] = 'GoldAntelope Bot'
-    env['GIT_AUTHOR_EMAIL'] = 'bot@goldantelope.app'
-    env['GIT_COMMITTER_NAME'] = 'GoldAntelope Bot'
-    env['GIT_COMMITTER_EMAIL'] = 'bot@goldantelope.app'
-    # Remove Replit-specific session vars that interfere
-    for k in ['REPLIT_ASKPASS_PID2_SESSION', 'REPLIT_SESSION']:
-        env.pop(k, None)
+    SSH = '/nix/store/m031f7b9gc32vp5rhjdfzmsfmx92zpb7-pid2-runtime-path/bin/ssh'
+    GIT = '/nix/store/6h39ipxhzp4r5in5g4rhdjz7p7fkicd0-replit-runtime-path/bin/git'
+    KEY = '/home/runner/.ssh/github_goldantelope'
+    env = {
+        'PATH': '/nix/store/m031f7b9gc32vp5rhjdfzmsfmx92zpb7-pid2-runtime-path/bin:/usr/bin:/bin',
+        'HOME': '/home/runner',
+        'GIT_SSH_COMMAND': f'{SSH} -i {KEY} -o StrictHostKeyChecking=no',
+        'GIT_AUTHOR_NAME': 'GoldAntelope Bot',
+        'GIT_AUTHOR_EMAIL': 'bot@goldantelope.app',
+        'GIT_COMMITTER_NAME': 'GoldAntelope Bot',
+        'GIT_COMMITTER_EMAIL': 'bot@goldantelope.app',
+    }
     # Remove stale lock files
     for lock in ['config.lock', 'index.lock', 'COMMIT_EDITMSG.lock']:
         lp = os.path.join(base, '.git', lock)
         if os.path.exists(lp):
             os.remove(lp)
     def run(cmd):
-        r = _sp.run(cmd, cwd=base, capture_output=True, text=True, env=env)
+        r = _sp.run([GIT] + cmd, cwd=base, capture_output=True, text=True, env=env)
         return r.stdout.strip() + r.stderr.strip()
-    # First: test token via GitHub API
-    import requests as _req
-    gh_resp = _req.get('https://api.github.com/user', headers={'Authorization': f'Bearer {token}', 'User-Agent': 'GoldAntelope'}, timeout=10)
-    gh_info = gh_resp.json()
-
+    msg = request.json.get('message', 'Update') if request.json else 'Update'
     out = []
-    out.append(f'GitHub API /user: {gh_resp.status_code} login={gh_info.get("login")}')
-    out.append(run(['git', 'add', '-A']))
-    out.append(run(['git', 'commit', '--allow-empty', '-m', 'Eager loading for all slider images; fix lazy-slider in both renders']))
-    out.append(run(['git', 'push', 'origin', 'master']))
-    return jsonify({'output': out})
+    out.append(run(['add', '-A']))
+    out.append(run(['commit', '--allow-empty', '-m', msg]))
+    out.append(run(['push', 'origin', 'master']))
+    return jsonify({'output': out, 'success': 'fatal' not in out[-1] and 'error' not in out[-1].lower()})
 
 
 if __name__ == '__main__':
