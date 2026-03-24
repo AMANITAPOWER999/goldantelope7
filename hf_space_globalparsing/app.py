@@ -1,4 +1,4 @@
-import os, asyncio, re, uvicorn, difflib
+import os, asyncio, re, uvicorn, difflib, time
 from fastapi import FastAPI
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
@@ -29,8 +29,8 @@ M = {
         'sea_phuket','realty_in_thailand','nedvig_thailand','thailand_nedvizhimost','globe_nedvizhka_Thailand'
     ],
     'VIET': [
-        'phuquoc_rent_wt', 'phyquocnedvigimost', 'Viet_Life_Phu_Quoc_rent', 'nhatrangapartment',
-        'tanrealtorgh', 'viet_life_niachang','nychang_arenda','rent_nha_trang','nyachang_nedvizhimost',
+        'phuquoc_rent_wt','phyquocnedvigimost','Viet_Life_Phu_Quoc_rent','nhatrangapartment',
+        'tanrealtorgh','viet_life_niachang','nychang_arenda','rent_nha_trang','nyachang_nedvizhimost',
         'nedvizimost_nhatrang','nhatrangforrent79','NhatrangRentl','arenda_v_nyachang','rent_appart_nha',
         'Arenda_Nyachang_Zhilye','NhaTrang_rental','realestatebythesea_1','NhaTrang_Luxury',
         'luckyhome_nhatrang','rentnhatrang','megasforrentnhatrang','viethome','gohomenhatrang',
@@ -39,26 +39,29 @@ M = {
         'RentHoChiMinh','Hanoirentapartment','HanoiRentl','Hanoi_Rent','PhuquocRentl'
     ],
     'BIKE': [
-        'bike_nhatrang', 'motohub_nhatrang', 'NhaTrang_moto_market', 'RentBikeUniq',
-        'BK_rental', 'nha_trang_rent', 'RentTwentyTwo22NhaTrang'
+        'bike_nhatrang','motohub_nhatrang','NhaTrang_moto_market','RentBikeUniq',
+        'BK_rental','nha_trang_rent','RentTwentyTwo22NhaTrang'
     ],
-    'MARKET': [
-        'vietnam_poputchiki', 'danang_mart', 'baraholka_niachang'
-    ],
-    'FUN': [
-        'MelomaniaMusicNT'
-    ],
-    'FOOD': [
-        'vietnam_food', 'danang_food', 'food_muine', 'food_nhatrang', 'phuquoc_food'
-    ],
+    'MARKET': ['vietnam_poputchiki','danang_mart','baraholka_niachang'],
+    'FUN': ['MelomaniaMusicNT'],
+    'FOOD': ['vietnam_food','danang_food','food_muine','food_nhatrang','phuquoc_food'],
     'CHAT': [
-        'vietnam_chatt', 'vungtau_chat', 'dalat_forum', 'danang_forum', 'danang_expats',
-        'danang_woman', 'danang_chatik', 'kamran_chat', 'kuinen_chat', 'nhatrang_chatik',
-        'nhatrang_expats', 'phanthiet_chat', 'fukuok_chatik', 'hochiminh_chat', 'hanoi_chat'
+        'vietnam_chatt','vungtau_chat','dalat_forum','danang_forum','danang_expats',
+        'danang_woman','danang_chatik','kamran_chat','kuinen_chat','nhatrang_chatik',
+        'nhatrang_expats','phanthiet_chat','fukuok_chatik','hochiminh_chat','hanoi_chat'
     ]
 }
 
 H = []
+STATS = {
+    'started_at': time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime()),
+    'connected_channels': {},
+    'failed_channels': {},
+    'forwarded': {},
+    'total_messages': 0,
+    'total_photos': 0,
+    'total_albums': 0,
+}
 
 def cl(t):
     if not t: return ""
@@ -77,31 +80,44 @@ def dup(t):
 
 async def start_client():
     if not SESS:
-        print("--- ОШИБКА: TELETHON_SESSION не задана ---")
+        print("❌ TELETHON_SESSION не задана!")
         return
     try:
         client = TelegramClient(StringSession(SESS), API_ID, API_HASH)
         await client.connect()
 
         if not await client.is_user_authorized():
-            print("--- ОШИБКА: СЕССИЯ НЕВАЛИДНА ---")
+            print("❌ Сессия невалидна!")
             return
 
         me = await client.get_me()
-        print(f"--- Авторизован как: {me.first_name} (@{me.username}) ---")
+        print(f"✅ Авторизован: {me.first_name} | ID: {me.id}")
+        STATS['user'] = f"{me.first_name} (id={me.id})"
 
         all_ents = []
-        print("--- ПОДКЛЮЧЕНИЕ К КАНАЛАМ ---")
-        for r_name, names in M.items():
-            ok = 0
+        print("\n📡 Подключение к каналам-источникам:")
+        print("=" * 50)
+        for grp, names in M.items():
+            ok, fail = [], []
             for n in names:
                 try:
                     ent = await client.get_input_entity(n)
                     all_ents.append(ent)
-                    ok += 1
-                except:
-                    pass
-            print(f"  {r_name}: {ok}/{len(names)}")
+                    ok.append(n)
+                except Exception as e:
+                    fail.append(f"{n}({str(e)[:30]})")
+            STATS['connected_channels'][grp] = ok
+            STATS['failed_channels'][grp] = fail
+            STATS['forwarded'][grp] = {'messages': 0, 'photos': 0, 'albums': 0}
+            dest = D[grp]
+            print(f"  [{grp}] → @{dest}: ✅{len(ok)}/{len(names)} каналов подключено")
+            if fail:
+                print(f"    ❌ Недоступны: {', '.join(fail[:3])}{'...' if len(fail)>3 else ''}")
+
+        total_connected = sum(len(v) for v in STATS['connected_channels'].values())
+        total_channels = sum(len(v) for v in M.values())
+        print("=" * 50)
+        print(f"📊 Итого: {total_connected}/{total_channels} каналов | Слушаю сообщения...\n")
 
         @client.on(events.NewMessage(chats=all_ents))
         async def h(e):
@@ -114,9 +130,13 @@ async def start_client():
                 reg = next((r for r, l in M.items() if any(x.lower() == un for x in l)), 'VIET')
                 msg = f"Источник: @{un}\nСсылка: https://t.me/{un}/{e.id}\n\n{cl(t)}"
                 await client.send_message(D[reg], msg[:1020], file=e.media, parse_mode=None)
-                print(f"OK @{un} -> {D[reg]}")
-            except:
-                pass
+                STATS['forwarded'][reg]['messages'] += 1
+                STATS['forwarded'][reg]['photos'] += 1
+                STATS['total_messages'] += 1
+                STATS['total_photos'] += 1
+                print(f"📨 @{un} → @{D[reg]} | 📸1 фото | Итого: {STATS['total_messages']} сообщ.")
+            except Exception as ex:
+                print(f"⚠️ Ошибка пересылки: {ex}")
 
         @client.on(events.Album(chats=all_ents))
         async def ha(e):
@@ -128,14 +148,19 @@ async def start_client():
                 reg = next((r for r, l in M.items() if any(x.lower() == un for x in l)), 'VIET')
                 msg = f"Источник: @{un}\nСсылка: https://t.me/{un}/{e.messages[0].id}\n\n{cl(e.text)}"
                 await client.send_message(D[reg], msg[:1020], file=p, parse_mode=None)
-                print(f"OK Album @{un} -> {D[reg]}")
-            except:
-                pass
+                STATS['forwarded'][reg]['messages'] += 1
+                STATS['forwarded'][reg]['photos'] += len(p)
+                STATS['forwarded'][reg]['albums'] += 1
+                STATS['total_messages'] += 1
+                STATS['total_photos'] += len(p)
+                STATS['total_albums'] += 1
+                print(f"🖼️  @{un} → @{D[reg]} | 📸{len(p)} фото (альбом) | Итого: {STATS['total_messages']} сообщ.")
+            except Exception as ex:
+                print(f"⚠️ Ошибка пересылки альбома: {ex}")
 
-        print("--- Парсер запущен, слушаю сообщения ---")
         await client.run_until_disconnected()
     except Exception as ex:
-        print(f"Критическая ошибка: {ex}")
+        print(f"❌ Критическая ошибка: {ex}")
 
 @app.on_event("startup")
 async def sup():
@@ -144,6 +169,10 @@ async def sup():
 @app.get("/")
 async def root():
     return {"status": "ok", "parser": "globalparsing"}
+
+@app.get("/stats")
+async def stats():
+    return STATS
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=7860)
