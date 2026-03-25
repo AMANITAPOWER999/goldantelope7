@@ -4844,6 +4844,228 @@ def forward_100():
     return jsonify({'success': True, 'message': f'Запущен форвард [{label}] — /api/admin/forward-100-status'})
 
 
+_FWDCUSTOM_STATE = {
+    'running': False, 'done': False, 'sent': 0, 'failed': 0,
+    'current': '', 'results': {}, 'error': None,
+}
+
+def _run_forward_custom(channels, dst_channel, limit_per_channel):
+    import time as _time, requests as _req
+    _FWDCUSTOM_STATE.update({
+        'running': True, 'done': False, 'sent': 0, 'failed': 0,
+        'current': 'init', 'results': {}, 'error': None,
+    })
+
+    bot_token = os.environ.get('VIETNAMPARSING_BOT_TOKEN') or os.environ.get('TELEGRAM_BOT_TOKEN', '')
+    if not bot_token:
+        _FWDCUSTOM_STATE.update({'running': False, 'done': True, 'error': 'no bot token'})
+        return
+
+    CDN_HEADERS = {
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
+        'Referer': 'https://t.me/',
+    }
+
+    try:
+        from vietnamparsing_parser import scrape_extra_channel_page
+    except Exception as e:
+        _FWDCUSTOM_STATE.update({'running': False, 'done': True, 'error': str(e)})
+        return
+
+    def scrape_n(channel, n):
+        all_msgs = []
+        before_id = None
+        for _ in range(n // 10 + 5):
+            try:
+                page = scrape_extra_channel_page(channel, before_id)
+            except Exception:
+                break
+            if not page:
+                break
+            all_msgs.extend(page)
+            if len(all_msgs) >= n:
+                break
+            ids = [m['post_id'] for m in page if m.get('post_id')]
+            if not ids:
+                break
+            before_id = min(ids)
+            _time.sleep(0.3)
+        return all_msgs[:n]
+
+    def download_photo(url):
+        try:
+            r = _req.get(url, headers=CDN_HEADERS, timeout=12)
+            if r.ok and len(r.content) > 500:
+                return r.content
+        except Exception:
+            pass
+        return None
+
+    def send_with_photo(dst_ch, photo_bytes, caption):
+        try:
+            r = _req.post(
+                f'https://api.telegram.org/bot{bot_token}/sendPhoto',
+                data={'chat_id': f'@{dst_ch}', 'caption': caption[:1024]},
+                files={'photo': ('photo.jpg', photo_bytes, 'image/jpeg')},
+                timeout=30)
+            if r.ok:
+                return True
+            if r.status_code == 429:
+                wait = r.json().get('parameters', {}).get('retry_after', 30)
+                _time.sleep(wait + 1)
+                r2 = _req.post(
+                    f'https://api.telegram.org/bot{bot_token}/sendPhoto',
+                    data={'chat_id': f'@{dst_ch}', 'caption': caption[:1024]},
+                    files={'photo': ('photo.jpg', photo_bytes, 'image/jpeg')},
+                    timeout=30)
+                return r2.ok
+        except Exception:
+            pass
+        return False
+
+    def send_album(dst_ch, photo_bytes_list, caption):
+        import json as _json
+        media = []
+        files = {}
+        for idx, pb in enumerate(photo_bytes_list[:10]):
+            key = f'photo{idx}'
+            item = {'type': 'photo', 'media': f'attach://{key}'}
+            if idx == 0:
+                item['caption'] = caption[:1024]
+            media.append(item)
+            files[key] = (f'{key}.jpg', pb, 'image/jpeg')
+        try:
+            r = _req.post(
+                f'https://api.telegram.org/bot{bot_token}/sendMediaGroup',
+                data={'chat_id': f'@{dst_ch}', 'media': _json.dumps(media)},
+                files=files, timeout=60)
+            if r.ok:
+                return True
+            if r.status_code == 429:
+                wait = r.json().get('parameters', {}).get('retry_after', 30)
+                _time.sleep(wait + 1)
+                r2 = _req.post(
+                    f'https://api.telegram.org/bot{bot_token}/sendMediaGroup',
+                    data={'chat_id': f'@{dst_ch}', 'media': _json.dumps(media)},
+                    files=files, timeout=60)
+                return r2.ok
+        except Exception:
+            pass
+        return False
+
+    import re as _re_clean
+    EMOJI_RE = _re_clean.compile(
+        '['
+        '\U0001F000-\U0001FFFF'
+        '\U00002600-\U000027BF'
+        '\U0000FE00-\U0000FE0F'
+        '\U0000200B-\U0000200D'
+        '\U00002060\U0000FEFF'
+        ']+')
+    HTML_RE = _re_clean.compile(r'<[^>]+>')
+
+    try:
+        total_sent = 0
+        total_failed = 0
+        for ch in channels:
+            _FWDCUSTOM_STATE['current'] = f'scraping @{ch}'
+            _FWDCUSTOM_STATE['results'][ch] = {'sent': 0, 'failed': 0, 'status': 'scraping'}
+            app.logger.info(f'[fwd-custom] scraping @{ch} (limit={limit_per_channel})')
+
+            msgs = scrape_n(ch, limit_per_channel)
+            app.logger.info(f'[fwd-custom] @{ch}: scraped {len(msgs)} posts')
+            _FWDCUSTOM_STATE['results'][ch] = {'sent': 0, 'failed': 0, 'total': len(msgs), 'status': 'sending'}
+            _FWDCUSTOM_STATE['current'] = f'sending @{ch}'
+
+            ch_sent = 0
+            ch_failed = 0
+            for i, msg in enumerate(msgs, 1):
+                raw_text = msg.get('text', '')
+                clean = HTML_RE.sub('', raw_text)
+                clean = EMOJI_RE.sub('', clean)
+                clean = _re_clean.sub(r'[ ]{2,}', ' ', clean)
+                clean = _re_clean.sub(r'\n{3,}', '\n\n', clean).strip()
+                post_id = msg.get('post_id', '')
+                tg_link = f'https://t.me/{ch}/{post_id}' if post_id else ''
+                caption = (clean[:900] + f'\n\n{tg_link}').strip() if tg_link else clean[:1024]
+
+                images = msg.get('images', [])
+                cdn_images = [u for u in images if 'cdn' in u.lower() or 'telesco' in u.lower()]
+
+                if not cdn_images:
+                    ch_failed += 1
+                    total_failed += 1
+                    _FWDCUSTOM_STATE['failed'] = total_failed
+                    _FWDCUSTOM_STATE['results'][ch] = {'sent': ch_sent, 'failed': ch_failed, 'total': len(msgs), 'pos': i, 'status': 'sending'}
+                    continue
+
+                ok = False
+                if len(cdn_images) == 1:
+                    pb = download_photo(cdn_images[0])
+                    if pb:
+                        ok = send_with_photo(dst_channel, pb, caption)
+                else:
+                    pbs = []
+                    for u in cdn_images[:10]:
+                        pb = download_photo(u)
+                        if pb:
+                            pbs.append(pb)
+                    if pbs:
+                        ok = send_album(dst_channel, pbs, caption)
+
+                if ok:
+                    ch_sent += 1
+                    total_sent += 1
+                    _FWDCUSTOM_STATE['sent'] = total_sent
+                else:
+                    ch_failed += 1
+                    total_failed += 1
+                    _FWDCUSTOM_STATE['failed'] = total_failed
+
+                _FWDCUSTOM_STATE['results'][ch] = {'sent': ch_sent, 'failed': ch_failed, 'total': len(msgs), 'pos': i, 'status': 'sending'}
+                _time.sleep(3)
+
+            _FWDCUSTOM_STATE['results'][ch] = {'sent': ch_sent, 'failed': ch_failed, 'total': len(msgs), 'status': 'done'}
+            app.logger.info(f'[fwd-custom] @{ch} DONE: sent={ch_sent} failed={ch_failed}')
+
+    except Exception as e:
+        _FWDCUSTOM_STATE['error'] = str(e)
+        app.logger.error(f'[fwd-custom] fatal: {e}')
+    finally:
+        _FWDCUSTOM_STATE['running'] = False
+        _FWDCUSTOM_STATE['done'] = True
+        _FWDCUSTOM_STATE['current'] = 'ЗАВЕРШЕНО'
+
+
+@app.route('/api/admin/forward-custom', methods=['POST'])
+def forward_custom():
+    if _FWDCUSTOM_STATE['running']:
+        return jsonify({'success': False, 'error': 'Уже запущено'})
+    data = request.json or {}
+    channels = data.get('channels', [])
+    dst = data.get('destination', 'vietnamparsing')
+    limit = data.get('limit', 200)
+    if not channels:
+        return jsonify({'success': False, 'error': 'channels required'})
+    import threading
+    threading.Thread(target=_run_forward_custom, args=(channels, dst, limit), daemon=True).start()
+    return jsonify({'success': True, 'message': f'Запущена пересылка {len(channels)} каналов (по {limit}) → @{dst}'})
+
+
+@app.route('/api/admin/forward-custom-status', methods=['GET'])
+def forward_custom_status():
+    return jsonify({
+        'success': True,
+        'running': _FWDCUSTOM_STATE['running'],
+        'done': _FWDCUSTOM_STATE['done'],
+        'sent': _FWDCUSTOM_STATE['sent'],
+        'failed': _FWDCUSTOM_STATE['failed'],
+        'current': _FWDCUSTOM_STATE['current'],
+        'results': _FWDCUSTOM_STATE['results'],
+        'error': _FWDCUSTOM_STATE['error'],
+    })
+
+
 @app.route('/api/admin/forward-100-status', methods=['GET'])
 def forward_100_status():
     return jsonify({
