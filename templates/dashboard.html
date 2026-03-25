@@ -12165,24 +12165,46 @@
 
         async function fetchEmptyChannels() {
             const btn = document.getElementById('mon-fetch-empty-btn');
-            if (!confirm('Запустить однократную загрузку последних ~50 постов из всех пустых каналов (33 канала: BIKE×7, VIET×13, THAI×13)?\n\nЭто займёт ~30-60 секунд.')) return;
-            if (btn) { btn.disabled = true; btn.textContent = '⏳ Загружаю...'; }
+            if (!confirm('Загрузить ровно 50 постов из каждого пустого канала (33 канала: BIKE×7, VIET×13, THAI×13)?\n\nЗапустится в фоне (~2-3 мин), прогресс будет обновляться.')) return;
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Запускаю...'; }
             try {
                 const r = await fetch('/api/admin/fetch-empty-channels', {method:'POST'});
                 const data = await r.json();
                 if (!data.success) throw new Error(data.error || 'Ошибка');
-                const byChannel = data.by_channel || {};
-                const lines = Object.entries(byChannel)
-                    .filter(([,n]) => n > 0)
-                    .map(([ch, n]) => `@${ch}: +${n}`)
-                    .join('\n') || 'Новых объявлений не найдено';
-                alert(`✅ Загружено объявлений: ${data.total_added}\n\n${lines}`);
-                // Refresh stats
-                await loadMonitoringStats();
+                // Poll for status
+                btn.textContent = '⏳ Загружаю...';
+                const poll = setInterval(async () => {
+                    try {
+                        const sr = await fetch('/api/admin/fetch-empty-status');
+                        const st = await sr.json();
+                        if (st.current) btn.textContent = `⏳ ${st.current}`;
+                        if (!st.running) {
+                            clearInterval(poll);
+                            if (st.error) {
+                                alert('Ошибка: ' + st.error);
+                            } else {
+                                const byChannel = st.results || {};
+                                const lines = Object.entries(byChannel)
+                                    .filter(([,n]) => n > 0)
+                                    .sort((a,b) => b[1]-a[1])
+                                    .map(([ch, n]) => `@${ch}: +${n}`)
+                                    .join('\n') || 'Новых объявлений не найдено';
+                                alert(`✅ Загружено объявлений: ${st.total}\n\n${lines}`);
+                                await loadMonitoringStats();
+                            }
+                            btn.disabled = false;
+                            btn.textContent = '📥 Заполнить пустые';
+                        }
+                    } catch(e) {
+                        clearInterval(poll);
+                        btn.disabled = false;
+                        btn.textContent = '📥 Заполнить пустые';
+                    }
+                }, 3000);
             } catch(e) {
                 alert('Ошибка: ' + e.message);
-            } finally {
-                if (btn) { btn.disabled = false; btn.textContent = '📥 Заполнить пустые'; }
+                btn.disabled = false;
+                btn.textContent = '📥 Заполнить пустые';
             }
         }
 

@@ -4273,10 +4273,11 @@ def hf_channels_check():
 
 # ============ FETCH EMPTY CHANNELS (one-shot history scrape) ============
 
-@app.route('/api/admin/fetch-empty-channels', methods=['POST'])
-def fetch_empty_channels():
-    """Разово скачивает последние ~50 постов из каналов с нулём объявлений."""
+_FETCH_STATE = {'running': False, 'done': False, 'total': 0, 'current': '', 'results': {}, 'error': None}
+
+def _run_fetch_empty():
     import time as _time
+    _FETCH_STATE.update({'running': True, 'done': False, 'total': 0, 'current': '', 'results': {}, 'error': None})
 
     EMPTY_BIKE = [
         'bike_nhatrang','motohub_nhatrang','NhaTrang_moto_market','RentBikeUniq',
@@ -4309,131 +4310,166 @@ def fetch_empty_channels():
             extract_title_th,
         )
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+        _FETCH_STATE['running'] = False
+        _FETCH_STATE['error'] = str(e)
+        return
 
-    results = {}
-    total_added = 0
+    def scrape_50(channel):
+        all_msgs = []
+        before_id = None
+        for _ in range(5):
+            page = scrape_extra_channel_page(channel, before_id)
+            if not page:
+                break
+            all_msgs.extend(page)
+            if len(all_msgs) >= 50:
+                break
+            ids = [m['post_id'] for m in page if m['post_id']]
+            if not ids:
+                break
+            before_id = min(ids)
+            _time.sleep(0.3)
+        return all_msgs[:50]
 
-    # ── Vietnam data ──
-    viet_data = viet_load()
-    viet_ids = viet_ids_fn(viet_data)
-    viet_data.setdefault('transport', [])
-    viet_data.setdefault('real_estate', [])
-
-    # ── BIKE channels → transport/bikes ──
-    for ch in EMPTY_BIKE:
-        count = 0
-        try:
-            msgs = scrape_extra_channel_page(ch)
-            for msg in msgs:
-                item_id = f"{ch}_{msg['post_id']}"
-                if item_id in viet_ids:
-                    continue
-                item = build_generic_listing(msg, item_id, ch, 'transport', 'bikes')
-                if item is None:
-                    continue
-                viet_data['transport'].insert(0, item)
-                viet_ids.add(item_id)
-                count += 1
-        except Exception as ex:
-            app.logger.warning(f"[fetch_empty] BIKE {ch}: {ex}")
-        results[ch] = count
-        total_added += count
-        _time.sleep(0.4)
-
-    # ── VIET channels → real_estate ──
-    for ch in EMPTY_VIET:
-        count = 0
-        try:
-            msgs = scrape_extra_channel_page(ch)
-            for msg in msgs:
-                item_id = f"{ch}_{msg['post_id']}"
-                if item_id in viet_ids:
-                    continue
-                item = build_generic_listing(msg, item_id, ch, 'real_estate')
-                if item is None:
-                    continue
-                city = viet_detect_city(item.get('text', ''))
-                item['city'] = city or 'Вьетнам'
-                item['city_ru'] = city or 'Вьетнам'
-                item['country'] = 'vietnam'
-                viet_data['real_estate'].insert(0, item)
-                viet_ids.add(item_id)
-                count += 1
-        except Exception as ex:
-            app.logger.warning(f"[fetch_empty] VIET {ch}: {ex}")
-        results[ch] = count
-        total_added += count
-        _time.sleep(0.4)
-
-    viet_save(viet_data)
-
-    # ── Thailand data ──
-    thai_data = thai_load()
-    thai_ids = thai_ids_fn(thai_data)
-    thai_data.setdefault('real_estate', [])
-
-    # ── THAI channels → real_estate ──
-    for ch in EMPTY_THAI:
-        count = 0
-        try:
-            msgs = scrape_extra_channel_page(ch)
-            for msg in msgs:
-                text = msg.get('text', '')
-                if not text or len(text) < 20:
-                    continue
-                if thai_spam(text):
-                    continue
-                photos = msg.get('images', [])
-                if not photos:
-                    continue
-                item_id = f"{ch}_{msg['post_id']}"
-                if item_id in thai_ids:
-                    continue
-                price_val, price_display = thai_price(text)
-                city = thai_city(text) or 'Таиланд'
-                listing_type = thai_lt(text)
-                title = extract_title_th(text)
-                thai_item = {
-                    'id': item_id,
-                    'title': title,
-                    'description': text[:500],
-                    'text': text,
-                    'price': price_val,
-                    'price_display': price_display,
-                    'city': city,
-                    'listing_type': listing_type,
-                    'contact': f'@{ch}',
-                    'telegram_link': f'https://t.me/{ch}/{msg["post_id"]}',
-                    'photos': photos,
-                    'image_url': photos[0] if photos else '',
-                    'all_images': photos,
-                    'date': msg.get('date', ''),
-                    'source': 'telegram',
-                    'channel': ch,
-                    'country': 'thailand',
-                }
-                thai_data['real_estate'].insert(0, thai_item)
-                thai_ids.add(item_id)
-                count += 1
-        except Exception as ex:
-            app.logger.warning(f"[fetch_empty] THAI {ch}: {ex}")
-        results[ch] = count
-        total_added += count
-        _time.sleep(0.4)
-
-    thai_save(thai_data)
-
-    # Invalidate in-memory cache
     try:
-        _file_path_cache.clear()
-    except Exception:
-        pass
+        results = _FETCH_STATE['results']
 
+        # ── Vietnam data ──
+        viet_data = viet_load()
+        viet_ids = viet_ids_fn(viet_data)
+        viet_data.setdefault('transport', [])
+        viet_data.setdefault('real_estate', [])
+
+        for ch in EMPTY_BIKE:
+            _FETCH_STATE['current'] = f'BIKE @{ch}'
+            count = 0
+            try:
+                msgs = scrape_50(ch)
+                for msg in msgs:
+                    item_id = f"{ch}_{msg['post_id']}"
+                    if item_id in viet_ids:
+                        continue
+                    item = build_generic_listing(msg, item_id, ch, 'transport', 'bikes')
+                    if item is None:
+                        continue
+                    viet_data['transport'].insert(0, item)
+                    viet_ids.add(item_id)
+                    count += 1
+            except Exception as ex:
+                app.logger.warning(f"[fetch_empty] BIKE {ch}: {ex}")
+            results[ch] = count
+            _FETCH_STATE['total'] += count
+            _time.sleep(0.4)
+
+        for ch in EMPTY_VIET:
+            _FETCH_STATE['current'] = f'VIET @{ch}'
+            count = 0
+            try:
+                msgs = scrape_50(ch)
+                for msg in msgs:
+                    item_id = f"{ch}_{msg['post_id']}"
+                    if item_id in viet_ids:
+                        continue
+                    item = build_generic_listing(msg, item_id, ch, 'real_estate')
+                    if item is None:
+                        continue
+                    city = viet_detect_city(item.get('text', ''))
+                    item['city'] = city or 'Вьетнам'
+                    item['city_ru'] = city or 'Вьетнам'
+                    item['country'] = 'vietnam'
+                    viet_data['real_estate'].insert(0, item)
+                    viet_ids.add(item_id)
+                    count += 1
+            except Exception as ex:
+                app.logger.warning(f"[fetch_empty] VIET {ch}: {ex}")
+            results[ch] = count
+            _FETCH_STATE['total'] += count
+            _time.sleep(0.4)
+
+        viet_save(viet_data)
+
+        # ── Thailand data ──
+        thai_data = thai_load()
+        thai_ids = thai_ids_fn(thai_data)
+        thai_data.setdefault('real_estate', [])
+
+        for ch in EMPTY_THAI:
+            _FETCH_STATE['current'] = f'THAI @{ch}'
+            count = 0
+            try:
+                msgs = scrape_50(ch)
+                for msg in msgs:
+                    text = msg.get('text', '')
+                    if not text or len(text) < 20:
+                        continue
+                    if thai_spam(text):
+                        continue
+                    photos = msg.get('images', [])
+                    if not photos:
+                        continue
+                    item_id = f"{ch}_{msg['post_id']}"
+                    if item_id in thai_ids:
+                        continue
+                    price_val, price_display = thai_price(text)
+                    city = thai_city(text) or 'Таиланд'
+                    listing_type = thai_lt(text)
+                    title = extract_title_th(text)
+                    thai_item = {
+                        'id': item_id, 'title': title,
+                        'description': text[:500], 'text': text,
+                        'price': price_val, 'price_display': price_display,
+                        'city': city, 'listing_type': listing_type,
+                        'contact': f'@{ch}',
+                        'telegram_link': f'https://t.me/{ch}/{msg["post_id"]}',
+                        'photos': photos, 'image_url': photos[0] if photos else '',
+                        'all_images': photos, 'date': msg.get('date', ''),
+                        'source': 'telegram', 'channel': ch, 'country': 'thailand',
+                    }
+                    thai_data['real_estate'].insert(0, thai_item)
+                    thai_ids.add(item_id)
+                    count += 1
+            except Exception as ex:
+                app.logger.warning(f"[fetch_empty] THAI {ch}: {ex}")
+            results[ch] = count
+            _FETCH_STATE['total'] += count
+            _time.sleep(0.4)
+
+        thai_save(thai_data)
+
+        try:
+            _file_path_cache.clear()
+        except Exception:
+            pass
+
+    except Exception as e:
+        _FETCH_STATE['error'] = str(e)
+        app.logger.error(f"[fetch_empty] fatal: {e}")
+    finally:
+        _FETCH_STATE['running'] = False
+        _FETCH_STATE['done'] = True
+        _FETCH_STATE['current'] = ''
+
+
+@app.route('/api/admin/fetch-empty-channels', methods=['POST'])
+def fetch_empty_channels():
+    if _FETCH_STATE['running']:
+        return jsonify({'success': False, 'error': 'Уже запущено', 'state': _FETCH_STATE})
+    import threading
+    t = threading.Thread(target=_run_fetch_empty, daemon=True)
+    t.start()
+    return jsonify({'success': True, 'message': 'Запущено в фоне — используйте /api/admin/fetch-empty-status для отслеживания'})
+
+
+@app.route('/api/admin/fetch-empty-status', methods=['GET'])
+def fetch_empty_status():
     return jsonify({
         'success': True,
-        'total_added': total_added,
-        'by_channel': results,
+        'running': _FETCH_STATE['running'],
+        'done': _FETCH_STATE['done'],
+        'total': _FETCH_STATE['total'],
+        'current': _FETCH_STATE['current'],
+        'results': _FETCH_STATE['results'],
+        'error': _FETCH_STATE['error'],
     })
 
 
