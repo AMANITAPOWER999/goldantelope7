@@ -4317,6 +4317,64 @@ def _run_fetch_empty():
 
     _state_lock = _threading.Lock()
 
+    # Маппинг группы → канал-получатель
+    _DST_CHANNELS = {
+        'BIKE': 'visaranvietnam',
+        'VIET': 'vietnamparsing',
+        'THAI': 'thailandparsing',
+    }
+
+    def _post_to_channel(grp, item):
+        """Отправляет одно объявление в нужный Telegram-канал через Bot API."""
+        import requests as _req
+        bot_token = os.environ.get('VIETNAMPARSING_BOT_TOKEN') or os.environ.get('TELEGRAM_BOT_TOKEN', '')
+        if not bot_token:
+            return
+        dst = _DST_CHANNELS.get(grp)
+        if not dst:
+            return
+        chat_id = f'@{dst}'
+
+        text = item.get('text') or item.get('description') or item.get('title') or ''
+        tg_link = item.get('telegram_link', '')
+        caption = (text[:900] + f'\n\n🔗 {tg_link}') if tg_link else text[:1024]
+        caption = caption.strip()
+
+        photos = item.get('photos') or item.get('all_images') or []
+        photo_url = photos[0] if photos else (item.get('image_url') or '')
+
+        try:
+            if photo_url:
+                r = _req.post(
+                    f'https://api.telegram.org/bot{bot_token}/sendPhoto',
+                    json={'chat_id': chat_id, 'photo': photo_url,
+                          'caption': caption, 'parse_mode': 'HTML'},
+                    timeout=15)
+                if not r.ok:
+                    err = r.json().get('description', r.text)
+                    app.logger.warning(f'[forward] sendPhoto @{dst}: {err} — retry as text')
+                    r2 = _req.post(
+                        f'https://api.telegram.org/bot{bot_token}/sendMessage',
+                        json={'chat_id': chat_id, 'text': caption,
+                              'parse_mode': 'HTML', 'disable_web_page_preview': False},
+                        timeout=15)
+                    if not r2.ok:
+                        app.logger.warning(f'[forward] sendMessage @{dst}: {r2.json().get("description")}')
+                else:
+                    app.logger.debug(f'[forward] ✅ sendPhoto @{dst}')
+            else:
+                r = _req.post(
+                    f'https://api.telegram.org/bot{bot_token}/sendMessage',
+                    json={'chat_id': chat_id, 'text': caption,
+                          'parse_mode': 'HTML', 'disable_web_page_preview': False},
+                    timeout=15)
+                if not r.ok:
+                    app.logger.warning(f'[forward] sendMessage @{dst}: {r.json().get("description")}')
+                else:
+                    app.logger.debug(f'[forward] ✅ sendMessage @{dst}')
+        except Exception as _e:
+            app.logger.warning(f'[forward] {grp}→{dst}: {_e}')
+
     def scrape_100(grp, channel):
         """Скачивает до 100 постов пагинацией, обновляет current в _FETCH_STATE."""
         _FETCH_STATE['current'] = f'{grp} @{channel}'
@@ -4341,6 +4399,7 @@ def _run_fetch_empty():
 
     try:
         results = _FETCH_STATE['results']
+        to_forward = []  # [(grp, item), ...]  — очередь для пересылки в каналы
 
         # ── Параллельный скрапинг всех каналов (5 воркеров) ──
         tasks = (
@@ -4377,6 +4436,7 @@ def _run_fetch_empty():
                     continue
                 viet_data['transport'].insert(0, item)
                 viet_ids.add(item_id)
+                to_forward.append(('BIKE', item))
                 count += 1
             results[ch] = count
             _FETCH_STATE['total'] += count
@@ -4397,6 +4457,7 @@ def _run_fetch_empty():
                 item['country'] = 'vietnam'
                 viet_data['real_estate'].insert(0, item)
                 viet_ids.add(item_id)
+                to_forward.append(('VIET', item))
                 count += 1
             results[ch] = count
             _FETCH_STATE['total'] += count
@@ -4440,11 +4501,23 @@ def _run_fetch_empty():
                 }
                 thai_data['real_estate'].insert(0, thai_item)
                 thai_ids.add(item_id)
+                to_forward.append(('THAI', thai_item))
                 count += 1
             results[ch] = count
             _FETCH_STATE['total'] += count
 
         thai_save(thai_data)
+
+        # ── Пересылка новых объявлений в Telegram-каналы ──
+        if to_forward:
+            _FETCH_STATE['current'] = f'Пересылка {len(to_forward)} объявлений...'
+            app.logger.info(f'[forward] Отправляю {len(to_forward)} объявлений в каналы')
+            for grp, item in to_forward:
+                try:
+                    _post_to_channel(grp, item)
+                except Exception as _fe:
+                    app.logger.warning(f'[forward] ошибка: {_fe}')
+                _time.sleep(0.5)  # 2 msg/сек — безопасный темп для Bot API
 
         try:
             _file_path_cache.clear()
