@@ -5042,6 +5042,7 @@
                             <div style="display:flex; gap:8px; align-items:center;">
                                 <span id="mon-last-update" style="font-size:11px; color:#666;"></span>
                                 <button onclick="loadMonitoringStats()" id="mon-refresh-btn" style="padding:7px 16px; background:#5865f2; color:white; border:none; border-radius:7px; cursor:pointer; font-size:13px; font-weight:600;">↻ Обновить</button>
+                                <button onclick="fetchEmptyChannels()" id="mon-fetch-empty-btn" style="padding:7px 16px; background:#16a34a; color:white; border:none; border-radius:7px; cursor:pointer; font-size:13px; font-weight:600;" title="Скачать последние ~50 постов из каналов с нулём объявлений">📥 Заполнить пустые</button>
                                 <label style="display:flex;align-items:center;gap:5px;color:#aaa;font-size:12px;cursor:pointer;">
                                     <input type="checkbox" id="mon-auto-refresh" onchange="toggleMonAutoRefresh(this.checked)" style="cursor:pointer;"> авто 30с
                                 </label>
@@ -12159,6 +12160,29 @@
                 if (summary) summary.textContent = 'Ошибка: ' + e.message;
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = '🔍 Проверить каналы'; }
+            }
+        }
+
+        async function fetchEmptyChannels() {
+            const btn = document.getElementById('mon-fetch-empty-btn');
+            if (!confirm('Запустить однократную загрузку последних ~50 постов из всех пустых каналов (33 канала: BIKE×7, VIET×13, THAI×13)?\n\nЭто займёт ~30-60 секунд.')) return;
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Загружаю...'; }
+            try {
+                const r = await fetch('/api/admin/fetch-empty-channels', {method:'POST'});
+                const data = await r.json();
+                if (!data.success) throw new Error(data.error || 'Ошибка');
+                const byChannel = data.by_channel || {};
+                const lines = Object.entries(byChannel)
+                    .filter(([,n]) => n > 0)
+                    .map(([ch, n]) => `@${ch}: +${n}`)
+                    .join('\n') || 'Новых объявлений не найдено';
+                alert(`✅ Загружено объявлений: ${data.total_added}\n\n${lines}`);
+                // Refresh stats
+                await loadMonitoringStats();
+            } catch(e) {
+                alert('Ошибка: ' + e.message);
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = '📥 Заполнить пустые'; }
             }
         }
 

@@ -4271,6 +4271,172 @@ def hf_channels_check():
     })
 
 
+# ============ FETCH EMPTY CHANNELS (one-shot history scrape) ============
+
+@app.route('/api/admin/fetch-empty-channels', methods=['POST'])
+def fetch_empty_channels():
+    """Разово скачивает последние ~50 постов из каналов с нулём объявлений."""
+    import time as _time
+
+    EMPTY_BIKE = [
+        'bike_nhatrang','motohub_nhatrang','NhaTrang_moto_market','RentBikeUniq',
+        'BK_rental','nha_trang_rent','RentTwentyTwo22NhaTrang',
+    ]
+    EMPTY_VIET = [
+        'phuquoc_rent_wt','phyquocnedvigimost','Viet_Life_Phu_Quoc_rent','nhatrangapartment',
+        'NhatrangRentl','viethome','huynhtruonq',
+        'HoChiMinhRentI','RentHoChiMinh','Hanoirentapartment','HanoiRentl','Hanoi_Rent','PhuquocRentl',
+    ]
+    EMPTY_THAI = [
+        'arenda_phukets','THAILAND_REAL_ESTATE_PHUKET','housephuket','arenda_phuket_thailand',
+        'phuketsk_arenda','phuket_nedvizhimost_thailand','phuketsk_for_rent',
+        'rentalsphuketonli','rentbuyphuket','Phuket_thailand05','arenda_pattaya',
+        'HappyHomePattaya','Samui_for_you',
+    ]
+
+    try:
+        from vietnamparsing_parser import (
+            scrape_extra_channel_page, build_generic_listing,
+            load_listings as viet_load, save_listings as viet_save,
+            get_existing_ids as viet_ids_fn,
+            detect_city as viet_detect_city,
+        )
+        from thailandparsing_parser import (
+            load_listings as thai_load, save_listings as thai_save,
+            get_existing_ids as thai_ids_fn,
+            is_spam as thai_spam, extract_price as thai_price,
+            detect_city as thai_city, detect_listing_type as thai_lt,
+            extract_title_th,
+        )
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+    results = {}
+    total_added = 0
+
+    # ── Vietnam data ──
+    viet_data = viet_load()
+    viet_ids = viet_ids_fn(viet_data)
+    viet_data.setdefault('transport', [])
+    viet_data.setdefault('real_estate', [])
+
+    # ── BIKE channels → transport/bikes ──
+    for ch in EMPTY_BIKE:
+        count = 0
+        try:
+            msgs = scrape_extra_channel_page(ch)
+            for msg in msgs:
+                item_id = f"{ch}_{msg['post_id']}"
+                if item_id in viet_ids:
+                    continue
+                item = build_generic_listing(msg, item_id, ch, 'transport', 'bikes')
+                if item is None:
+                    continue
+                viet_data['transport'].insert(0, item)
+                viet_ids.add(item_id)
+                count += 1
+        except Exception as ex:
+            app.logger.warning(f"[fetch_empty] BIKE {ch}: {ex}")
+        results[ch] = count
+        total_added += count
+        _time.sleep(0.4)
+
+    # ── VIET channels → real_estate ──
+    for ch in EMPTY_VIET:
+        count = 0
+        try:
+            msgs = scrape_extra_channel_page(ch)
+            for msg in msgs:
+                item_id = f"{ch}_{msg['post_id']}"
+                if item_id in viet_ids:
+                    continue
+                item = build_generic_listing(msg, item_id, ch, 'real_estate')
+                if item is None:
+                    continue
+                city = viet_detect_city(item.get('text', ''))
+                item['city'] = city or 'Вьетнам'
+                item['city_ru'] = city or 'Вьетнам'
+                item['country'] = 'vietnam'
+                viet_data['real_estate'].insert(0, item)
+                viet_ids.add(item_id)
+                count += 1
+        except Exception as ex:
+            app.logger.warning(f"[fetch_empty] VIET {ch}: {ex}")
+        results[ch] = count
+        total_added += count
+        _time.sleep(0.4)
+
+    viet_save(viet_data)
+
+    # ── Thailand data ──
+    thai_data = thai_load()
+    thai_ids = thai_ids_fn(thai_data)
+    thai_data.setdefault('real_estate', [])
+
+    # ── THAI channels → real_estate ──
+    for ch in EMPTY_THAI:
+        count = 0
+        try:
+            msgs = scrape_extra_channel_page(ch)
+            for msg in msgs:
+                text = msg.get('text', '')
+                if not text or len(text) < 20:
+                    continue
+                if thai_spam(text):
+                    continue
+                photos = msg.get('images', [])
+                if not photos:
+                    continue
+                item_id = f"{ch}_{msg['post_id']}"
+                if item_id in thai_ids:
+                    continue
+                price_val, price_display = thai_price(text)
+                city = thai_city(text) or 'Таиланд'
+                listing_type = thai_lt(text)
+                title = extract_title_th(text)
+                thai_item = {
+                    'id': item_id,
+                    'title': title,
+                    'description': text[:500],
+                    'text': text,
+                    'price': price_val,
+                    'price_display': price_display,
+                    'city': city,
+                    'listing_type': listing_type,
+                    'contact': f'@{ch}',
+                    'telegram_link': f'https://t.me/{ch}/{msg["post_id"]}',
+                    'photos': photos,
+                    'image_url': photos[0] if photos else '',
+                    'all_images': photos,
+                    'date': msg.get('date', ''),
+                    'source': 'telegram',
+                    'channel': ch,
+                    'country': 'thailand',
+                }
+                thai_data['real_estate'].insert(0, thai_item)
+                thai_ids.add(item_id)
+                count += 1
+        except Exception as ex:
+            app.logger.warning(f"[fetch_empty] THAI {ch}: {ex}")
+        results[ch] = count
+        total_added += count
+        _time.sleep(0.4)
+
+    thai_save(thai_data)
+
+    # Invalidate in-memory cache
+    try:
+        _file_path_cache.clear()
+    except Exception:
+        pass
+
+    return jsonify({
+        'success': True,
+        'total_added': total_added,
+        'by_channel': results,
+    })
+
+
 # ============ VIETNAMPARSING PARSER INTEGRATION ============
 
 @app.route('/api/admin/vietnamparsing-status', methods=['GET'])
