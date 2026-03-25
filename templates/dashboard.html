@@ -7656,7 +7656,7 @@
                         'products': '🧸 Товары'
                     };
                     
-                    let html = '<div class="listing-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;">' + data.map(item => {
+                    let html = '<div class="listing-grid">' + data.map(item => {
                         // ONLY use item.image_url — the backend refreshes it via Telegram Bot API.
                         // item.all_images and item.photos contain expired CDN URLs (telesco.pe → 404).
                         let images = [];
