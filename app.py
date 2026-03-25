@@ -4537,6 +4537,150 @@ def _run_fetch_empty():
         _FETCH_STATE['current'] = ''
 
 
+# ── Forward-100 state & runner ────────────────────────────────────────────────
+
+_FWD100_STATE = {
+    'running': False, 'done': False,
+    'sent': 0, 'failed': 0, 'current': '',
+    'results': {},   # {grp: {sent, failed}}
+    'error': None,
+}
+
+
+def _run_forward_100():
+    """Пересылает по 100 объявлений в каждый канал через forwardMessage."""
+    import time as _time, re as _re, requests as _req
+
+    _FWD100_STATE.update({
+        'running': True, 'done': False,
+        'sent': 0, 'failed': 0, 'current': '',
+        'results': {'BIKE': {'sent': 0, 'failed': 0},
+                    'VIET': {'sent': 0, 'failed': 0},
+                    'THAI': {'sent': 0, 'failed': 0}},
+        'error': None,
+    })
+
+    bot_token = os.environ.get('VIETNAMPARSING_BOT_TOKEN') or os.environ.get('TELEGRAM_BOT_TOKEN', '')
+
+    DST = {'BIKE': 'visaranvietnam', 'VIET': 'vietnamparsing', 'THAI': 'thailandparsing'}
+    # source channels that ARE the destination (skip them)
+    DST_NAMES = set(v.lower() for v in DST.values())
+
+    def parse_tg_link(link):
+        m = _re.match(r'https://t\.me/([^/]+)/(\d+)', link or '')
+        return (m.group(1), int(m.group(2))) if m else (None, None)
+
+    def forward_one(from_chat, msg_id, to_chat, retries=2):
+        """Пересылает одно сообщение, возвращает True/False."""
+        for attempt in range(retries + 1):
+            try:
+                r = _req.post(
+                    f'https://api.telegram.org/bot{bot_token}/forwardMessage',
+                    json={'chat_id': f'@{to_chat}',
+                          'from_chat_id': f'@{from_chat}',
+                          'message_id': msg_id},
+                    timeout=12)
+                if r.ok:
+                    return True
+                rj = r.json()
+                desc = rj.get('description', '')
+                if r.status_code == 429:
+                    wait = rj.get('parameters', {}).get('retry_after', 30)
+                    app.logger.warning(f'[fwd100] rate limit → @{to_chat}: retry after {wait}s')
+                    _time.sleep(wait + 1)
+                elif 'message to forward not found' in desc or 'chat not found' in desc:
+                    app.logger.debug(f'[fwd100] skip @{from_chat}/{msg_id}: {desc}')
+                    return False
+                else:
+                    app.logger.warning(f'[fwd100] @{from_chat}/{msg_id} → @{to_chat}: {desc}')
+                    return False
+            except Exception as e:
+                app.logger.warning(f'[fwd100] exception: {e}')
+                if attempt < retries:
+                    _time.sleep(3)
+        return False
+
+    try:
+        from vietnamparsing_parser import load_listings as viet_load
+        from thailandparsing_parser import load_listings as thai_load
+        viet_data = viet_load()
+        thai_data = thai_load()
+
+        def pick_100(items, grp):
+            """Берёт 100 объявлений из источников (не из канала-назначения)."""
+            result = []
+            for item in items:
+                tl = item.get('telegram_link', '')
+                ch, mid = parse_tg_link(tl)
+                if not ch or not mid:
+                    continue
+                # Пропускаем посты, которые уже в канале-назначении
+                if ch.lower() in DST_NAMES:
+                    continue
+                result.append((ch, mid))
+                if len(result) >= 100:
+                    break
+            return result
+
+        groups = {
+            'BIKE': (viet_data.get('transport', []), DST['BIKE']),
+            'VIET': (viet_data.get('real_estate', []), DST['VIET']),
+            'THAI': (thai_data.get('real_estate', []), DST['THAI']),
+        }
+
+        for grp, (items, dst_ch) in groups.items():
+            candidates = pick_100(items, grp)
+            _FWD100_STATE['current'] = f'{grp}: 0/{len(candidates)} → @{dst_ch}'
+            app.logger.info(f'[fwd100] {grp}: {len(candidates)} кандидатов → @{dst_ch}')
+
+            sent = 0
+            failed = 0
+            for i, (from_ch, msg_id) in enumerate(candidates, 1):
+                _FWD100_STATE['current'] = f'{grp}: {i}/{len(candidates)} → @{dst_ch}'
+                ok = forward_one(from_ch, msg_id, dst_ch)
+                if ok:
+                    sent += 1
+                    _FWD100_STATE['sent'] += 1
+                else:
+                    failed += 1
+                    _FWD100_STATE['failed'] += 1
+                _FWD100_STATE['results'][grp] = {'sent': sent, 'failed': failed}
+                _time.sleep(3)  # ~20 сообщений/мин — лимит Telegram
+
+            app.logger.info(f'[fwd100] {grp} итого: sent={sent} failed={failed}')
+
+    except Exception as e:
+        _FWD100_STATE['error'] = str(e)
+        app.logger.error(f'[fwd100] fatal: {e}')
+    finally:
+        _FWD100_STATE['running'] = False
+        _FWD100_STATE['done'] = True
+        _FWD100_STATE['current'] = ''
+
+
+@app.route('/api/admin/forward-100', methods=['POST'])
+def forward_100():
+    if _FWD100_STATE['running']:
+        return jsonify({'success': False, 'error': 'Уже запущено'})
+    import threading
+    threading.Thread(target=_run_forward_100, daemon=True).start()
+    return jsonify({'success': True, 'message': 'Запущен форвард 100/группу — /api/admin/forward-100-status'})
+
+
+@app.route('/api/admin/forward-100-status', methods=['GET'])
+def forward_100_status():
+    return jsonify({
+        'success': True,
+        'running': _FWD100_STATE['running'],
+        'done': _FWD100_STATE['done'],
+        'sent': _FWD100_STATE['sent'],
+        'failed': _FWD100_STATE['failed'],
+        'current': _FWD100_STATE['current'],
+        'results': _FWD100_STATE['results'],
+        'error': _FWD100_STATE['error'],
+    })
+
+
 @app.route('/api/admin/fetch-empty-channels', methods=['POST'])
 def fetch_empty_channels():
     if _FETCH_STATE['running']:
