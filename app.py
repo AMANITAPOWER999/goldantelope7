@@ -4542,14 +4542,14 @@ def _run_fetch_empty():
 _FWD100_STATE = {
     'running': False, 'done': False,
     'sent': 0, 'failed': 0, 'current': '',
-    'results': {},   # {grp: {sent, failed}}
+    'results': {},
     'error': None,
 }
 
 
 def _run_forward_100():
-    """Пересылает по 100 объявлений в каждый канал через forwardMessage."""
-    import time as _time, re as _re, requests as _req
+    """Скачивает последние 100 постов с каждого источника, отправляет фото+текст в каналы-назначения."""
+    import time as _time, requests as _req
 
     _FWD100_STATE.update({
         'running': True, 'done': False,
@@ -4561,93 +4561,233 @@ def _run_forward_100():
     })
 
     bot_token = os.environ.get('VIETNAMPARSING_BOT_TOKEN') or os.environ.get('TELEGRAM_BOT_TOKEN', '')
+    if not bot_token:
+        _FWD100_STATE.update({'running': False, 'done': True, 'error': 'no bot token'})
+        return
 
     DST = {'BIKE': 'visaranvietnam', 'VIET': 'vietnamparsing', 'THAI': 'thailandparsing'}
-    # source channels that ARE the destination (skip them)
-    DST_NAMES = set(v.lower() for v in DST.values())
 
-    def parse_tg_link(link):
-        m = _re.match(r'https://t\.me/([^/]+)/(\d+)', link or '')
-        return (m.group(1), int(m.group(2))) if m else (None, None)
+    M = {
+        'THAI': [
+            'arenda_phukets','THAILAND_REAL_ESTATE_PHUKET','housephuket','arenda_phuket_thailand',
+            'phuket_nedvizhimost_rent','phuketsk_arenda','phuket_nedvizhimost_thailand','phuketsk_for_rent',
+            'phuket_rentas','rentalsphuketonli','rentbuyphuket','Phuket_thailand05','nedvizhimost_pattaya',
+            'arenda_pattaya','pattaya_realty_estate','HappyHomePattaya','sea_bangkok','Samui_for_you',
+            'sea_phuket','realty_in_thailand','nedvig_thailand','thailand_nedvizhimost',
+            'globe_nedvizhka_Thailand',
+        ],
+        'VIET': [
+            'phuquoc_rent_wt','phyquocnedvigimost','Viet_Life_Phu_Quoc_rent','nhatrangapartment',
+            'tanrealtorgh','viet_life_niachang','nychang_arenda','rent_nha_trang','nyachang_nedvizhimost',
+            'nedvizimost_nhatrang','nhatrangforrent79','NhatrangRentl','arenda_v_nyachang','rent_appart_nha',
+            'Arenda_Nyachang_Zhilye','NhaTrang_rental','realestatebythesea_1','NhaTrang_Luxury',
+            'luckyhome_nhatrang','rentnhatrang','megasforrentnhatrang','viethome','gohomenhatrang',
+            'Vietnam_arenda','huynhtruonq','DaNangRentAFlat','danag_viet_life_rent','Danang_House',
+            'DaNangApartmentRent','danang_arenda','arenda_v_danang','HoChiMinhRentI','hcmc_arenda',
+            'RentHoChiMinh','Hanoirentapartment','HanoiRentl','Hanoi_Rent','PhuquocRentl',
+        ],
+        'BIKE': [
+            'bike_nhatrang','motohub_nhatrang','NhaTrang_moto_market','RentBikeUniq',
+            'BK_rental','nha_trang_rent','RentTwentyTwo22NhaTrang',
+        ],
+    }
 
-    def forward_one(from_chat, msg_id, to_chat, retries=2):
-        """Пересылает одно сообщение, возвращает True/False."""
-        for attempt in range(retries + 1):
+    CDN_HEADERS = {
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
+        'Referer': 'https://t.me/',
+    }
+
+    try:
+        from vietnamparsing_parser import scrape_extra_channel_page
+    except Exception as e:
+        _FWD100_STATE.update({'running': False, 'done': True, 'error': str(e)})
+        return
+
+    def scrape_last_100(channel):
+        """Скрапит до 100 последних постов из t.me/s/channel."""
+        all_msgs = []
+        before_id = None
+        for _ in range(10):
             try:
-                r = _req.post(
-                    f'https://api.telegram.org/bot{bot_token}/forwardMessage',
-                    json={'chat_id': f'@{to_chat}',
-                          'from_chat_id': f'@{from_chat}',
-                          'message_id': msg_id},
-                    timeout=12)
-                if r.ok:
-                    return True
-                rj = r.json()
-                desc = rj.get('description', '')
-                if r.status_code == 429:
-                    wait = rj.get('parameters', {}).get('retry_after', 30)
-                    app.logger.warning(f'[fwd100] rate limit → @{to_chat}: retry after {wait}s')
-                    _time.sleep(wait + 1)
-                elif 'message to forward not found' in desc or 'chat not found' in desc:
-                    app.logger.debug(f'[fwd100] skip @{from_chat}/{msg_id}: {desc}')
-                    return False
-                else:
-                    app.logger.warning(f'[fwd100] @{from_chat}/{msg_id} → @{to_chat}: {desc}')
-                    return False
-            except Exception as e:
-                app.logger.warning(f'[fwd100] exception: {e}')
-                if attempt < retries:
-                    _time.sleep(3)
+                page = scrape_extra_channel_page(channel, before_id)
+            except Exception:
+                break
+            if not page:
+                break
+            all_msgs.extend(page)
+            if len(all_msgs) >= 100:
+                break
+            ids = [m['post_id'] for m in page if m.get('post_id')]
+            if not ids:
+                break
+            before_id = min(ids)
+            _time.sleep(0.2)
+        return all_msgs[:100]
+
+    def download_photo(url):
+        """Скачивает CDN-фото, возвращает bytes или None."""
+        try:
+            r = _req.get(url, headers=CDN_HEADERS, timeout=12)
+            if r.ok and len(r.content) > 500:
+                return r.content
+        except Exception:
+            pass
+        return None
+
+    def send_with_photo(dst_ch, photo_bytes, caption):
+        """Отправляет фото + подпись. Возвращает True/False."""
+        try:
+            r = _req.post(
+                f'https://api.telegram.org/bot{bot_token}/sendPhoto',
+                data={'chat_id': f'@{dst_ch}', 'caption': caption[:1024]},
+                files={'photo': ('photo.jpg', photo_bytes, 'image/jpeg')},
+                timeout=30)
+            if r.ok:
+                return True
+            if r.status_code == 429:
+                wait = r.json().get('parameters', {}).get('retry_after', 30)
+                app.logger.warning(f'[fwd100] rate limit @{dst_ch}: wait {wait}s')
+                _time.sleep(wait + 1)
+                r2 = _req.post(
+                    f'https://api.telegram.org/bot{bot_token}/sendPhoto',
+                    data={'chat_id': f'@{dst_ch}', 'caption': caption[:1024]},
+                    files={'photo': ('photo.jpg', photo_bytes, 'image/jpeg')},
+                    timeout=30)
+                return r2.ok
+            app.logger.warning(f'[fwd100] sendPhoto @{dst_ch}: {r.json().get("description","")}')
+        except Exception as e:
+            app.logger.warning(f'[fwd100] exception: {e}')
+        return False
+
+    def send_text_only(dst_ch, caption):
+        """Отправляет текстовое сообщение. Возвращает True/False."""
+        try:
+            r = _req.post(
+                f'https://api.telegram.org/bot{bot_token}/sendMessage',
+                json={'chat_id': f'@{dst_ch}', 'text': caption[:4096],
+                      'disable_web_page_preview': True},
+                timeout=10)
+            if r.ok:
+                return True
+            if r.status_code == 429:
+                wait = r.json().get('parameters', {}).get('retry_after', 30)
+                _time.sleep(wait + 1)
+                r2 = _req.post(
+                    f'https://api.telegram.org/bot{bot_token}/sendMessage',
+                    json={'chat_id': f'@{dst_ch}', 'text': caption[:4096],
+                          'disable_web_page_preview': True},
+                    timeout=10)
+                return r2.ok
+        except Exception as e:
+            app.logger.warning(f'[fwd100] text exception: {e}')
+        return False
+
+    def send_album(dst_ch, photo_bytes_list, caption):
+        """Отправляет альбом (до 10 фото) + подпись на первом. Возвращает True/False."""
+        import json as _json
+        media = []
+        files = {}
+        for idx, pb in enumerate(photo_bytes_list[:10]):
+            key = f'photo{idx}'
+            item = {'type': 'photo', 'media': f'attach://{key}'}
+            if idx == 0:
+                item['caption'] = caption[:1024]
+            media.append(item)
+            files[key] = (f'{key}.jpg', pb, 'image/jpeg')
+        try:
+            r = _req.post(
+                f'https://api.telegram.org/bot{bot_token}/sendMediaGroup',
+                data={'chat_id': f'@{dst_ch}', 'media': _json.dumps(media)},
+                files=files, timeout=60)
+            if r.ok:
+                return True
+            if r.status_code == 429:
+                wait = r.json().get('parameters', {}).get('retry_after', 30)
+                _time.sleep(wait + 1)
+                r2 = _req.post(
+                    f'https://api.telegram.org/bot{bot_token}/sendMediaGroup',
+                    data={'chat_id': f'@{dst_ch}', 'media': _json.dumps(media)},
+                    files=files, timeout=60)
+                return r2.ok
+            app.logger.warning(f'[fwd100] album @{dst_ch}: {r.json().get("description","")}')
+        except Exception as e:
+            app.logger.warning(f'[fwd100] album exception: {e}')
         return False
 
     try:
-        from vietnamparsing_parser import load_listings as viet_load
-        from thailandparsing_parser import load_listings as thai_load
-        viet_data = viet_load()
-        thai_data = thai_load()
-
-        def pick_100(items, grp):
-            """Берёт 100 объявлений из источников (не из канала-назначения)."""
-            result = []
-            for item in items:
-                tl = item.get('telegram_link', '')
-                ch, mid = parse_tg_link(tl)
-                if not ch or not mid:
-                    continue
-                # Пропускаем посты, которые уже в канале-назначении
-                if ch.lower() in DST_NAMES:
-                    continue
-                result.append((ch, mid))
-                if len(result) >= 100:
-                    break
-            return result
-
-        groups = {
-            'BIKE': (viet_data.get('transport', []), DST['BIKE']),
-            'VIET': (viet_data.get('real_estate', []), DST['VIET']),
-            'THAI': (thai_data.get('real_estate', []), DST['THAI']),
-        }
-
-        for grp, (items, dst_ch) in groups.items():
-            candidates = pick_100(items, grp)
-            _FWD100_STATE['current'] = f'{grp}: 0/{len(candidates)} → @{dst_ch}'
-            app.logger.info(f'[fwd100] {grp}: {len(candidates)} кандидатов → @{dst_ch}')
-
+        for grp in ('BIKE', 'VIET', 'THAI'):
+            dst_ch = DST[grp]
+            channels = M[grp]
             sent = 0
             failed = 0
-            for i, (from_ch, msg_id) in enumerate(candidates, 1):
-                _FWD100_STATE['current'] = f'{grp}: {i}/{len(candidates)} → @{dst_ch}'
-                ok = forward_one(from_ch, msg_id, dst_ch)
+            total_scraped = 0
+
+            _FWD100_STATE['current'] = f'{grp}: скрапинг {len(channels)} каналов...'
+            app.logger.info(f'[fwd100] {grp}: скрапинг {len(channels)} каналов → @{dst_ch}')
+
+            # Скрапим все каналы параллельно
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            all_msgs = []  # [(channel, msg), ...]
+            with ThreadPoolExecutor(max_workers=5) as pool:
+                futs = {pool.submit(scrape_last_100, ch): ch for ch in channels}
+                for fut in as_completed(futs):
+                    ch = futs[fut]
+                    try:
+                        msgs = fut.result()
+                        for m in msgs:
+                            m['_src_channel'] = ch
+                        all_msgs.extend(msgs)
+                    except Exception as e:
+                        app.logger.warning(f'[fwd100] scrape {ch}: {e}')
+
+            total_scraped = len(all_msgs)
+            # Берём 100 (новейшие — ближе к началу)
+            to_send = all_msgs[:100]
+            app.logger.info(f'[fwd100] {grp}: scraped {total_scraped}, sending {len(to_send)} → @{dst_ch}')
+
+            for i, msg in enumerate(to_send, 1):
+                _FWD100_STATE['current'] = f'{grp}: {i}/{len(to_send)} → @{dst_ch}'
+                ch = msg.get('_src_channel', '?')
+                text = msg.get('text', '')
+                post_id = msg.get('post_id', '')
+                tg_link = f'https://t.me/{ch}/{post_id}' if post_id else ''
+                caption = (text[:900] + f'\n\n🔗 {tg_link}').strip() if tg_link else text[:1024]
+
+                images = msg.get('images', [])
+                cdn_images = [u for u in images if 'cdn' in u.lower() or 'telesco' in u.lower()]
+
+                ok = False
+                if cdn_images:
+                    if len(cdn_images) == 1:
+                        pb = download_photo(cdn_images[0])
+                        if pb:
+                            ok = send_with_photo(dst_ch, pb, caption)
+                    else:
+                        pbs = []
+                        for u in cdn_images[:10]:
+                            pb = download_photo(u)
+                            if pb:
+                                pbs.append(pb)
+                        if pbs:
+                            ok = send_album(dst_ch, pbs, caption)
+
+                if not cdn_images:
+                    failed += 1
+                    _FWD100_STATE['failed'] += 1
+                    _FWD100_STATE['results'][grp] = {'sent': sent, 'failed': failed}
+                    continue
+
                 if ok:
                     sent += 1
                     _FWD100_STATE['sent'] += 1
                 else:
                     failed += 1
                     _FWD100_STATE['failed'] += 1
-                _FWD100_STATE['results'][grp] = {'sent': sent, 'failed': failed}
-                _time.sleep(3)  # ~20 сообщений/мин — лимит Telegram
 
-            app.logger.info(f'[fwd100] {grp} итого: sent={sent} failed={failed}')
+                _FWD100_STATE['results'][grp] = {'sent': sent, 'failed': failed}
+                _time.sleep(3)
+
+            app.logger.info(f'[fwd100] {grp} ИТОГО: sent={sent} failed={failed}')
 
     except Exception as e:
         _FWD100_STATE['error'] = str(e)
