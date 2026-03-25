@@ -4715,106 +4715,114 @@ def _run_forward_100(only_groups=None):
             app.logger.warning(f'[fwd100] album exception: {e}')
         return False
 
+    import re as _re_clean
+    EMOJI_RE = _re_clean.compile(
+        '['
+        '\U0001F000-\U0001FFFF'
+        '\U00002600-\U000027BF'
+        '\U0000FE00-\U0000FE0F'
+        '\U0000200B-\U0000200D'
+        '\U00002060\U0000FEFF'
+        '\U000000A9\U000000AE\U00002122\U00002139'
+        '\U00002190-\U000021FF'
+        '\U00002300-\U000023FF'
+        '\U00002460-\U000024FF'
+        '\U00002500-\U000025FF'
+        '\U00002600-\U000026FF'
+        '\U00002700-\U000027BF'
+        '\U00002900-\U0000297F'
+        '\U00002B00-\U00002BFF'
+        '\U00003000-\U0000303F'
+        '\U00003200-\U000032FF'
+        '\U0000E000-\U0000F8FF'
+        '\U000E0000-\U000E007F'
+        ']+')
+    HTML_RE = _re_clean.compile(r'<[^>]+>')
+
+    def process_group(grp):
+        dst_ch = DST[grp]
+        channels = M[grp]
+        sent = 0
+        failed = 0
+
+        _FWD100_STATE['results'][grp] = {'sent': 0, 'failed': 0, 'status': 'scraping'}
+        app.logger.info(f'[fwd100] {grp}: скрапинг {len(channels)} каналов → @{dst_ch}')
+
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        all_msgs = []
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            futs = {pool.submit(scrape_last_100, ch): ch for ch in channels}
+            for fut in as_completed(futs):
+                ch = futs[fut]
+                try:
+                    msgs = fut.result()
+                    for m in msgs:
+                        m['_src_channel'] = ch
+                    all_msgs.extend(msgs)
+                except Exception as e:
+                    app.logger.warning(f'[fwd100] scrape {ch}: {e}')
+
+        to_send = all_msgs
+        app.logger.info(f'[fwd100] {grp}: scraped {len(to_send)}, sending ALL → @{dst_ch}')
+        _FWD100_STATE['results'][grp] = {'sent': 0, 'failed': 0, 'total': len(to_send), 'status': 'sending'}
+
+        for i, msg in enumerate(to_send, 1):
+            ch = msg.get('_src_channel', '?')
+            raw_text = msg.get('text', '')
+            clean = HTML_RE.sub('', raw_text)
+            clean = EMOJI_RE.sub('', clean)
+            clean = _re_clean.sub(r'[ ]{2,}', ' ', clean)
+            clean = _re_clean.sub(r'\n{3,}', '\n\n', clean).strip()
+            post_id = msg.get('post_id', '')
+            tg_link = f'https://t.me/{ch}/{post_id}' if post_id else ''
+            caption = (clean[:900] + f'\n\n{tg_link}').strip() if tg_link else clean[:1024]
+
+            images = msg.get('images', [])
+            cdn_images = [u for u in images if 'cdn' in u.lower() or 'telesco' in u.lower()]
+
+            if not cdn_images:
+                failed += 1
+                _FWD100_STATE['failed'] += 1
+                _FWD100_STATE['results'][grp] = {'sent': sent, 'failed': failed, 'total': len(to_send), 'pos': i, 'status': 'sending'}
+                continue
+
+            ok = False
+            if len(cdn_images) == 1:
+                pb = download_photo(cdn_images[0])
+                if pb:
+                    ok = send_with_photo(dst_ch, pb, caption)
+            else:
+                pbs = []
+                for u in cdn_images[:10]:
+                    pb = download_photo(u)
+                    if pb:
+                        pbs.append(pb)
+                if pbs:
+                    ok = send_album(dst_ch, pbs, caption)
+
+            if ok:
+                sent += 1
+                _FWD100_STATE['sent'] += 1
+            else:
+                failed += 1
+                _FWD100_STATE['failed'] += 1
+
+            _FWD100_STATE['results'][grp] = {'sent': sent, 'failed': failed, 'total': len(to_send), 'pos': i, 'status': 'sending'}
+            _time.sleep(3)
+
+        _FWD100_STATE['results'][grp] = {'sent': sent, 'failed': failed, 'total': len(to_send), 'status': 'done'}
+        app.logger.info(f'[fwd100] {grp} ИТОГО: sent={sent} failed={failed}')
+
     try:
         groups_to_run = only_groups or ['BIKE', 'VIET', 'THAI']
+        import threading
+        threads = []
         for grp in groups_to_run:
-            dst_ch = DST[grp]
-            channels = M[grp]
-            sent = 0
-            failed = 0
-            total_scraped = 0
-
-            _FWD100_STATE['current'] = f'{grp}: скрапинг {len(channels)} каналов...'
-            app.logger.info(f'[fwd100] {grp}: скрапинг {len(channels)} каналов → @{dst_ch}')
-
-            # Скрапим все каналы параллельно
-            from concurrent.futures import ThreadPoolExecutor, as_completed
-            all_msgs = []  # [(channel, msg), ...]
-            with ThreadPoolExecutor(max_workers=5) as pool:
-                futs = {pool.submit(scrape_last_100, ch): ch for ch in channels}
-                for fut in as_completed(futs):
-                    ch = futs[fut]
-                    try:
-                        msgs = fut.result()
-                        for m in msgs:
-                            m['_src_channel'] = ch
-                        all_msgs.extend(msgs)
-                    except Exception as e:
-                        app.logger.warning(f'[fwd100] scrape {ch}: {e}')
-
-            total_scraped = len(all_msgs)
-            to_send = all_msgs
-            app.logger.info(f'[fwd100] {grp}: scraped {total_scraped}, sending ALL → @{dst_ch}')
-
-            for i, msg in enumerate(to_send, 1):
-                _FWD100_STATE['current'] = f'{grp}: {i}/{len(to_send)} → @{dst_ch}'
-                ch = msg.get('_src_channel', '?')
-                import re as _re_clean
-                raw_text = msg.get('text', '')
-                clean = _re_clean.sub(r'<[^>]+>', '', raw_text)
-                clean = _re_clean.sub(
-                    '['
-                    '\U0001F000-\U0001FFFF'
-                    '\U00002600-\U000027BF'
-                    '\U0000FE00-\U0000FE0F'
-                    '\U0000200B-\U0000200D'
-                    '\U00002060\U0000FEFF'
-                    '\U000000A9\U000000AE\U00002122\U00002139'
-                    '\U00002190-\U000021FF'
-                    '\U00002300-\U000023FF'
-                    '\U00002460-\U000024FF'
-                    '\U00002500-\U000025FF'
-                    '\U00002600-\U000026FF'
-                    '\U00002700-\U000027BF'
-                    '\U00002900-\U0000297F'
-                    '\U00002B00-\U00002BFF'
-                    '\U00003000-\U0000303F'
-                    '\U00003200-\U000032FF'
-                    '\U0000E000-\U0000F8FF'
-                    '\U000E0000-\U000E007F'
-                    ']+', '', clean)
-                clean = _re_clean.sub(r'[ ]{2,}', ' ', clean)
-                clean = _re_clean.sub(r'\n{3,}', '\n\n', clean)
-                clean = clean.strip()
-                post_id = msg.get('post_id', '')
-                tg_link = f'https://t.me/{ch}/{post_id}' if post_id else ''
-                caption = (clean[:900] + f'\n\n{tg_link}').strip() if tg_link else clean[:1024]
-
-                images = msg.get('images', [])
-                cdn_images = [u for u in images if 'cdn' in u.lower() or 'telesco' in u.lower()]
-
-                ok = False
-                if cdn_images:
-                    if len(cdn_images) == 1:
-                        pb = download_photo(cdn_images[0])
-                        if pb:
-                            ok = send_with_photo(dst_ch, pb, caption)
-                    else:
-                        pbs = []
-                        for u in cdn_images[:10]:
-                            pb = download_photo(u)
-                            if pb:
-                                pbs.append(pb)
-                        if pbs:
-                            ok = send_album(dst_ch, pbs, caption)
-
-                if not cdn_images:
-                    failed += 1
-                    _FWD100_STATE['failed'] += 1
-                    _FWD100_STATE['results'][grp] = {'sent': sent, 'failed': failed}
-                    continue
-
-                if ok:
-                    sent += 1
-                    _FWD100_STATE['sent'] += 1
-                else:
-                    failed += 1
-                    _FWD100_STATE['failed'] += 1
-
-                _FWD100_STATE['results'][grp] = {'sent': sent, 'failed': failed}
-                _time.sleep(3)
-
-            app.logger.info(f'[fwd100] {grp} ИТОГО: sent={sent} failed={failed}')
+            t = threading.Thread(target=process_group, args=(grp,), daemon=True)
+            t.start()
+            threads.append(t)
+        for t in threads:
+            t.join()
 
     except Exception as e:
         _FWD100_STATE['error'] = str(e)
@@ -4822,7 +4830,7 @@ def _run_forward_100(only_groups=None):
     finally:
         _FWD100_STATE['running'] = False
         _FWD100_STATE['done'] = True
-        _FWD100_STATE['current'] = ''
+        _FWD100_STATE['current'] = 'ЗАВЕРШЕНО'
 
 
 @app.route('/api/admin/forward-100', methods=['POST'])
