@@ -4277,21 +4277,20 @@ def _run_fetch_empty():
     import time as _time
     _FETCH_STATE.update({'running': True, 'done': False, 'total': 0, 'current': '', 'results': {}, 'error': None})
 
-    # Только каналы с меткой HF TF (BIKE×5 + VIET×23 + THAI×8 = 36)
+    # Только каналы с 0 объявлений — парсим последние 100 постов
     EMPTY_BIKE = [
-        'bike_nhatrang','motohub_nhatrang','nha_trang_rent','BK_rental','RentBikeUniq',
+        'NhaTrang_moto_market','RentTwentyTwo22NhaTrang',
     ]
     EMPTY_VIET = [
-        'arenda_v_danang','danang_arenda','nychang_arenda','nedvizimost_nhatrang',
-        'rent_nha_trang','rent_appart_nha','nyachang_nedvizhimost','megasforrentnhatrang',
-        'danag_viet_life_rent','DaNangRentAFlat','hcmc_arenda','viet_life_niachang',
-        'Viet_Life_Phu_Quoc_rent','arenda_v_nyachang','nhatrangforrent79','DaNangApartmentRent',
-        'realestatebythesea_1','viethome','Hanoirentapartment','phyquocnedvigimost',
-        'NhaTrang_Luxury','Hanoi_Rent','HoChiMinhRentI',
+        'phuquoc_rent_wt','nhatrangapartment','tanrealtorgh','NhatrangRentl',
+        'NhaTrang_rental','luckyhome_nhatrang','gohomenhatrang','Vietnam_arenda',
+        'huynhtruonq','HoChiMinhRentI','RentHoChiMinh','HanoiRentl','Hanoi_Rent','PhuquocRentl',
     ]
     EMPTY_THAI = [
-        'nedvig_thailand','nedvizhimost_pattaya','sea_bangkok','sea_phuket',
-        'realty_in_thailand','pattaya_realty_estate','phuket_rentas','globe_nedvizhka_Thailand',
+        'arenda_phukets','THAILAND_REAL_ESTATE_PHUKET','housephuket','arenda_phuket_thailand',
+        'phuket_nedvizhimost_rent','phuketsk_arenda','phuket_nedvizhimost_thailand','phuketsk_for_rent',
+        'rentalsphuketonli','rentbuyphuket','Phuket_thailand05','arenda_pattaya',
+        'HappyHomePattaya','Samui_for_you','thailand_nedvizhimost','globe_nedvizhka_Thailand',
     ]
 
     try:
@@ -4313,22 +4312,22 @@ def _run_fetch_empty():
         _FETCH_STATE['error'] = str(e)
         return
 
-    def scrape_50(channel):
+    def scrape_100(channel):
         all_msgs = []
         before_id = None
-        for _ in range(5):
+        for _ in range(10):
             page = scrape_extra_channel_page(channel, before_id)
             if not page:
                 break
             all_msgs.extend(page)
-            if len(all_msgs) >= 50:
+            if len(all_msgs) >= 100:
                 break
             ids = [m['post_id'] for m in page if m['post_id']]
             if not ids:
                 break
             before_id = min(ids)
             _time.sleep(0.3)
-        return all_msgs[:50]
+        return all_msgs[:100]
 
     try:
         results = _FETCH_STATE['results']
@@ -4343,7 +4342,7 @@ def _run_fetch_empty():
             _FETCH_STATE['current'] = f'BIKE @{ch}'
             count = 0
             try:
-                msgs = scrape_50(ch)
+                msgs = scrape_100(ch)
                 for msg in msgs:
                     item_id = f"{ch}_{msg['post_id']}"
                     if item_id in viet_ids:
@@ -4364,7 +4363,7 @@ def _run_fetch_empty():
             _FETCH_STATE['current'] = f'VIET @{ch}'
             count = 0
             try:
-                msgs = scrape_50(ch)
+                msgs = scrape_100(ch)
                 for msg in msgs:
                     item_id = f"{ch}_{msg['post_id']}"
                     if item_id in viet_ids:
@@ -4396,7 +4395,7 @@ def _run_fetch_empty():
             _FETCH_STATE['current'] = f'THAI @{ch}'
             count = 0
             try:
-                msgs = scrape_50(ch)
+                msgs = scrape_100(ch)
                 for msg in msgs:
                     text = msg.get('text', '')
                     if not text or len(text) < 20:

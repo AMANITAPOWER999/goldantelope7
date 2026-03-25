@@ -12165,7 +12165,7 @@
 
         async function fetchEmptyChannels() {
             const btn = document.getElementById('mon-fetch-empty-btn');
-            if (!confirm('Загрузить ровно 50 постов из каждого HF TF канала (36 каналов: BIKE×5, VIET×23, THAI×8)?\n\nЗапустится в фоне (~3-5 мин), прогресс будет обновляться.')) return;
+            if (!confirm('Загрузить последние 100 постов из каналов с 0 объявлений (BIKE×2, VIET×14, THAI×16 = 32 канала)?\n\nЗапустится в фоне (~5-8 мин), прогресс будет обновляться.')) return;
             if (btn) { btn.disabled = true; btn.textContent = '⏳ Запускаю...'; }
             try {
                 const r = await fetch('/api/admin/fetch-empty-channels', {method:'POST'});
