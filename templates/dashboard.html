@@ -12316,16 +12316,20 @@
             if (_monCurrentTab === 'channels') {
                 const tbody = document.getElementById('mon-channels-tbody');
                 if (!tbody) return;
-                const channels = (lst.by_channel || []).filter(c => !search || c.channel.toLowerCase().includes(search));
-                // Build a set of HF source channels for tagging
+                // Build sets for HF and TF source channels
                 const hfSrcs = new Set();
                 Object.values((data.hf_space?.source_channels)||{}).forEach(arr => arr.forEach(ch => hfSrcs.add(ch.toLowerCase())));
                 const tfSrcs = new Set();
                 Object.values((data.telethon_forwarder?.groups)||{}).forEach(g => (g.channels_ok||[]).forEach(ch => tfSrcs.add(ch.toLowerCase())));
+                // Only show channels that are HF sources (clean list)
+                const channels = (lst.by_channel || []).filter(c =>
+                    hfSrcs.has(c.channel.toLowerCase()) &&
+                    (!search || c.channel.toLowerCase().includes(search))
+                );
 
                 tbody.innerHTML = channels.map((ch, i) => {
-                    const isHF = hfSrcs.has(ch.channel);
-                    const isTF = tfSrcs.has(ch.channel);
+                    const isHF = hfSrcs.has(ch.channel.toLowerCase());
+                    const isTF = tfSrcs.has(ch.channel.toLowerCase());
                     const srcTags = [isHF?'<span style="background:#5865f222;color:#5865f2;border:1px solid #5865f244;border-radius:4px;padding:1px 5px;font-size:10px;">HF</span>':'', isTF?'<span style="background:#23c55e22;color:#23c55e;border:1px solid #23c55e44;border-radius:4px;padding:1px 5px;font-size:10px;">TF</span>':''].filter(Boolean).join(' ');
                     const catName = CATEGORY_NAMES[ch.top_category] || ch.top_category || '—';
                     const rowBg = i % 2 === 0 ? '#12122a' : '#0f0f1a';
