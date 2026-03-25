@@ -228,10 +228,14 @@
         
         .listing-grid { 
             display: grid !important; 
-            grid-template-columns: repeat(3, 1fr) !important; 
+            grid-template-columns: repeat(4, 1fr) !important; 
             gap: 15px !important; 
             margin-bottom: 30px; 
             width: 100%;
+        }
+        
+        @media (max-width: 1200px) {
+            .listing-grid { grid-template-columns: repeat(3, 1fr) !important; }
         }
         
         @media (max-width: 992px) {
