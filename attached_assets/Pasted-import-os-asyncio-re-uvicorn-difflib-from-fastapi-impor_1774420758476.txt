@@ -1,0 +1,115 @@
+import os, asyncio, re, uvicorn, difflib
+from fastapi import FastAPI
+from telethon import TelegramClient, events
+from telethon.sessions import StringSession
+from telethon.tl.types import MessageMediaPhoto
+
+app = FastAPI()
+
+API_ID = 32881984
+API_HASH = 'd2588f09dfbc5103ef77ef21c07dbf8b'
+SESS = '1BVtsOJkBuz806FpphgXcreH699G3qFto5llFEgvQmddAgcgudSgvIuvs6a9OfYIiYmGzi8YRXXJQmzlhf7MIzmA0R1sopab0liPX_ok611U5jviu5tlY6C5NfrFiAMtiXCbMF-6z35i4I1rOTZ9tvrCQ6ExxeAVHuJMsuVHcyJoRBfOWk1-rUsRU03ZBq0N7NWHsvl_gMpqZrTIwvYGfW-68RJbHjVdgdwv9daQK1blj4yPRAX2lYnZ54pB4dnuv9JUDDUBlw5jYpgBBEppK3Qdftb0lM5h3z88iUXBp3z7wU-LkcJWF2jJzORYhdAZHiorhUOoqTLWvqaqi9gBeUCADHk7pC84='
+
+D = {
+    'VIET': 'vietnamparsing',
+    'THAI': 'thailandparsing',
+    'BIKE': 'visaranvietnam'
+}
+
+M = {
+    'THAI': [
+        'arenda_phukets','THAILAND_REAL_ESTATE_PHUKET','housephuket','arenda_phuket_thailand',
+        'phuket_nedvizhimost_rent','phuketsk_arenda','phuket_nedvizhimost_thailand','phuketsk_for_rent',
+        'phuket_rentas','rentalsphuketonli','rentbuyphuket','Phuket_thailand05','nedvizhimost_pattaya',
+        'arenda_pattaya','pattaya_realty_estate','HappyHomePattaya','sea_bangkok','Samui_for_you',
+        'sea_phuket','realty_in_thailand','nedvig_thailand','thailand_nedvizhimost',
+        'globe_nedvizhka_Thailand'
+    ],
+    'VIET': [
+        'phuquoc_rent_wt', 'phyquocnedvigimost', 'Viet_Life_Phu_Quoc_rent', 'nhatrangapartment', 
+        'tanrealtorgh', 'viet_life_niachang','nychang_arenda','rent_nha_trang','nyachang_nedvizhimost',
+        'nedvizimost_nhatrang','nhatrangforrent79','NhatrangRentl','arenda_v_nyachang','rent_appart_nha',
+        'Arenda_Nyachang_Zhilye','NhaTrang_rental','realestatebythesea_1','NhaTrang_Luxury',
+        'luckyhome_nhatrang','rentnhatrang','megasforrentnhatrang','viethome','gohomenhatrang',
+        'Vietnam_arenda','huynhtruonq','DaNangRentAFlat','danag_viet_life_rent','Danang_House',
+        'DaNangApartmentRent','danang_arenda','arenda_v_danang','HoChiMinhRentI','hcmc_arenda',
+        'RentHoChiMinh','Hanoirentapartment','HanoiRentl','Hanoi_Rent','PhuquocRentl'
+    ],
+    'BIKE': [
+        'bike_nhatrang', 'motohub_nhatrang', 'NhaTrang_moto_market', 'RentBikeUniq', 
+        'BK_rental', 'nha_trang_rent', 'RentTwentyTwo22NhaTrang'
+    ]
+}
+
+H = []
+
+def cl(t):
+    if not t: return ""
+    t = re.sub(r"t\.me/\S+|http\S+|#[A-Za-z0-9_а-яА-ЯёЁ]+|Источник:.*", "", t, flags=re.I)
+    t = re.sub(r'[^\w\s.,!?:;()\-+=%№"\'/]', '', t)
+    return " ".join(t.split())
+
+def dup(t):
+    if not t or len(t) < 20: return False
+    c = re.sub(r'[^a-zA-Zа-яА-ЯёЁ0-9]', '', t)
+    for o in H:
+        if difflib.SequenceMatcher(None, c, o).ratio() > 0.88: return True
+    H.append(c)
+    if len(H) > 500: H.pop(0)
+    return False
+
+async def start_client():
+    client = TelegramClient(StringSession(SESS), API_ID, API_HASH)
+    await client.connect()
+    
+    all_ents = []
+    print("--- СТАТИСТИКА ПОДКЛЮЧЕНИЯ ---")
+    for r_name, names in M.items():
+        c = 0
+        for n in names:
+            try:
+                e = await client.get_input_entity(n)
+                all_ents.append(e)
+                c += 1
+            except: pass
+        print(f"Группа {r_name}: {c}/{len(names)}")
+
+    @client.on(events.NewMessage(chats=all_ents))
+    async def h(e):
+        if e.grouped_id or not e.media or not isinstance(e.media, MessageMediaPhoto): return
+        t = e.raw_text or ""
+        if len(t) < 15 or dup(t): return
+        try:
+            chat = await e.get_chat()
+            un = chat.username.lower() if hasattr(chat, 'username') and chat.username else str(e.chat_id)
+            reg = next((r for r, l in M.items() if any(x.lower() == un for x in l)), 'VIET')
+            msg = f"Источник: @{un}\nСсылка: https://t.me/{un}/{e.id}\n\n{cl(t)}"
+            await client.send_message(D[reg], msg[:1020], file=e.media, parse_mode=None)
+            print(f"OK @{un}")
+        except: pass
+
+    @client.on(events.Album(chats=all_ents))
+    async def ha(e):
+        p = [m for m in e.messages if isinstance(m.media, MessageMediaPhoto)]
+        if not p or dup(e.text): return
+        try:
+            chat = await e.get_chat()
+            un = chat.username.lower() if hasattr(chat, 'username') and chat.username else str(e.chat_id)
+            reg = next((r for r, l in M.items() if any(x.lower() == un for x in l)), 'VIET')
+            msg = f"Источник: @{un}\nСсылка: https://t.me/{un}/{e.messages[0].id}\n\n{cl(e.text)}"
+            await client.send_message(D[reg], msg[:1020], file=p, parse_mode=None)
+            print(f"OK Album @{un}")
+        except: pass
+
+    await client.run_until_disconnected()
+
+@app.on_event("startup")
+async def sup():
+    asyncio.create_task(start_client())
+
+@app.get("/")
+async def r():
+    return {"status": "ok"}
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=7860)

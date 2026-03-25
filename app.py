@@ -3972,7 +3972,6 @@ def globalparsing_status():
         if hf_token:
             headers['Authorization'] = f'Bearer {hf_token}'
 
-        # Пинг самого Space
         ping_ok = False
         try:
             ping_r = requests.get(f'{HF_SPACE_URL}/', timeout=8)
@@ -3980,7 +3979,6 @@ def globalparsing_status():
         except Exception:
             pass
 
-        # Метаданные Space через HF API
         space_info = {}
         try:
             meta_r = requests.get(HF_API_URL, headers=headers, timeout=8)
@@ -4004,6 +4002,174 @@ def globalparsing_status():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/monitoring-stats', methods=['GET'])
+def monitoring_stats():
+    """Полная статистика мониторинга: статусы парсеров + кол-во объявлений по группам."""
+    import re as _re
+
+    # ── 1. HuggingFace Space ──
+    hf_token = os.environ.get('HF_TOKEN', '')
+    hf_headers = {'Authorization': f'Bearer {hf_token}'} if hf_token else {}
+    hf_ping = False
+    hf_info = {}
+    try:
+        r = requests.get(f'{HF_SPACE_URL}/', timeout=6)
+        hf_ping = r.status_code == 200 and r.json().get('status') == 'ok'
+    except Exception:
+        pass
+    try:
+        r2 = requests.get(HF_API_URL, headers=hf_headers, timeout=6)
+        if r2.status_code == 200:
+            meta = r2.json()
+            rt = meta.get('runtime', {})
+            hf_info = {
+                'stage': rt.get('stage', 'UNKNOWN'),
+                'hardware': rt.get('hardware', {}).get('current', 'unknown'),
+                'replicas': rt.get('replicas', {}).get('current', 0),
+                'last_modified': meta.get('lastModified', ''),
+            }
+    except Exception:
+        pass
+
+    # ── 2. Vietnamparsing parser ──
+    vp_state = {}
+    try:
+        from vietnamparsing_parser import get_parser_state
+        vp_state = get_parser_state()
+    except Exception:
+        pass
+
+    # ── 3. Telethon forwarder ──
+    tf_stats = {}
+    try:
+        from telethon_forwarder import STATS as TF_STATS, SOURCES as TF_SOURCES, DEST as TF_DEST
+        tf_stats = {
+            'running': TF_STATS.get('running', False),
+            'user': TF_STATS.get('user'),
+            'started_at': TF_STATS.get('started_at'),
+            'total_messages': TF_STATS.get('total_messages', 0),
+            'total_photos': TF_STATS.get('total_photos', 0),
+            'total_albums': TF_STATS.get('total_albums', 0),
+            'groups': {},
+        }
+        for grp, names in TF_SOURCES.items():
+            ok = TF_STATS.get('connected', {}).get(grp, [])
+            fail = TF_STATS.get('failed', {}).get(grp, [])
+            fwd = TF_STATS.get('forwarded', {}).get(grp, {})
+            tf_stats['groups'][grp] = {
+                'dest': TF_DEST.get(grp, ''),
+                'total': len(names),
+                'connected': len(ok),
+                'failed': len(fail),
+                'channels_ok': ok,
+                'channels_fail': fail,
+                'forwarded_messages': fwd.get('messages', 0),
+                'forwarded_photos': fwd.get('photos', 0),
+                'forwarded_albums': fwd.get('albums', 0),
+            }
+    except Exception as e:
+        tf_stats = {'error': str(e)}
+
+    # ── 4. HF Space source channels (from globalparsing) ──
+    HF_SOURCES = {
+        'THAI': [
+            'arenda_phukets','THAILAND_REAL_ESTATE_PHUKET','housephuket','arenda_phuket_thailand',
+            'phuket_nedvizhimost_rent','phuketsk_arenda','phuket_nedvizhimost_thailand','phuketsk_for_rent',
+            'phuket_rentas','rentalsphuketonli','rentbuyphuket','Phuket_thailand05','nedvizhimost_pattaya',
+            'arenda_pattaya','pattaya_realty_estate','HappyHomePattaya','sea_bangkok','Samui_for_you',
+            'sea_phuket','realty_in_thailand','nedvig_thailand','thailand_nedvizhimost',
+            'globe_nedvizhka_Thailand',
+        ],
+        'VIET': [
+            'phuquoc_rent_wt','phyquocnedvigimost','Viet_Life_Phu_Quoc_rent','nhatrangapartment',
+            'tanrealtorgh','viet_life_niachang','nychang_arenda','rent_nha_trang','nyachang_nedvizhimost',
+            'nedvizimost_nhatrang','nhatrangforrent79','NhatrangRentl','arenda_v_nyachang','rent_appart_nha',
+            'Arenda_Nyachang_Zhilye','NhaTrang_rental','realestatebythesea_1','NhaTrang_Luxury',
+            'luckyhome_nhatrang','rentnhatrang','megasforrentnhatrang','viethome','gohomenhatrang',
+            'Vietnam_arenda','huynhtruonq','DaNangRentAFlat','danag_viet_life_rent','Danang_House',
+            'DaNangApartmentRent','danang_arenda','arenda_v_danang','HoChiMinhRentI','hcmc_arenda',
+            'RentHoChiMinh','Hanoirentapartment','HanoiRentl','Hanoi_Rent','PhuquocRentl',
+        ],
+        'BIKE': [
+            'bike_nhatrang','motohub_nhatrang','NhaTrang_moto_market','RentBikeUniq',
+            'BK_rental','nha_trang_rent','RentTwentyTwo22NhaTrang',
+        ],
+    }
+
+    # ── 5. Listings stats by source channel ──
+    files = {
+        'vietnam': 'listings_vietnam.json',
+        'thailand': 'listings_thailand.json',
+        'india': 'listings_india.json',
+        'indonesia': 'listings_indonesia.json',
+    }
+    channel_stats = {}   # {channel: {country, category, count}}
+    country_totals = {}  # {country: count}
+    category_totals = {} # {category: count}
+
+    for country, fname in files.items():
+        try:
+            data = load_data(country)
+            country_totals[country] = 0
+            for cat, items in data.items():
+                if not isinstance(items, list):
+                    continue
+                category_totals[cat] = category_totals.get(cat, 0) + len(items)
+                country_totals[country] += len(items)
+                for item in items:
+                    src = item.get('channel', '') or item.get('source_channel', '')
+                    if not src:
+                        tl = item.get('telegram_link', '')
+                        m = _re.search(r't\.me/([^/]+)/', tl)
+                        if m:
+                            src = m.group(1)
+                    src = src.lstrip('@').lower() if src else 'unknown'
+                    key = src
+                    if key not in channel_stats:
+                        channel_stats[key] = {}
+                    if country not in channel_stats[key]:
+                        channel_stats[key][country] = {}
+                    channel_stats[key][country][cat] = channel_stats[key][country].get(cat, 0) + 1
+        except Exception:
+            pass
+
+    # Flatten to list sorted by total count
+    channel_list = []
+    for ch, countries in channel_stats.items():
+        total = sum(sum(cats.values()) for cats in countries.values())
+        country_str = ', '.join(sorted(countries.keys()))
+        cats_all = {}
+        for cats in countries.values():
+            for c, n in cats.items():
+                cats_all[c] = cats_all.get(c, 0) + n
+        top_cat = max(cats_all, key=cats_all.get) if cats_all else ''
+        channel_list.append({
+            'channel': ch,
+            'total': total,
+            'countries': country_str,
+            'top_category': top_cat,
+            'by_country': countries,
+        })
+    channel_list.sort(key=lambda x: -x['total'])
+
+    return jsonify({
+        'success': True,
+        'hf_space': {
+            'ping_ok': hf_ping,
+            'url': HF_SPACE_URL,
+            'info': hf_info,
+            'source_channels': HF_SOURCES,
+        },
+        'vietnamparsing': vp_state,
+        'telethon_forwarder': tf_stats,
+        'listings': {
+            'by_channel': channel_list[:80],
+            'country_totals': country_totals,
+            'category_totals': category_totals,
+        },
+    })
 
 
 # ============ VIETNAMPARSING PARSER INTEGRATION ============

@@ -5033,6 +5033,103 @@
 
                 <div id="admin-tools" style="display: none;">
 
+                    <!-- ══════════════════════════════════════════════ -->
+                    <!-- МОНИТОРИНГ ПАРСЕРОВ -->
+                    <!-- ══════════════════════════════════════════════ -->
+                    <div style="background: #0f0f1a; border-radius: 14px; padding: 22px; margin-bottom: 22px; border: 1px solid #2a2a3d;">
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; flex-wrap:wrap; gap:10px;">
+                            <h3 style="margin:0; color:#e8e8ff; font-size:17px;">📡 Мониторинг парсеров</h3>
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <span id="mon-last-update" style="font-size:11px; color:#666;"></span>
+                                <button onclick="loadMonitoringStats()" id="mon-refresh-btn" style="padding:7px 16px; background:#5865f2; color:white; border:none; border-radius:7px; cursor:pointer; font-size:13px; font-weight:600;">↻ Обновить</button>
+                                <label style="display:flex;align-items:center;gap:5px;color:#aaa;font-size:12px;cursor:pointer;">
+                                    <input type="checkbox" id="mon-auto-refresh" onchange="toggleMonAutoRefresh(this.checked)" style="cursor:pointer;"> авто 30с
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Карточки статусов -->
+                        <div id="mon-status-cards" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:12px; margin-bottom:20px;">
+                            <div class="mon-card" id="mon-card-hf" style="background:#1a1a2e; border-radius:10px; padding:14px; border:1px solid #2a2a3d;">
+                                <div style="font-size:11px; color:#888; margin-bottom:5px;">HuggingFace Space</div>
+                                <div style="font-size:20px; font-weight:700; color:#fff;" id="mon-hf-status">—</div>
+                                <div style="font-size:11px; color:#666; margin-top:4px;" id="mon-hf-detail">глобальный парсер</div>
+                            </div>
+                            <div class="mon-card" id="mon-card-tf" style="background:#1a1a2e; border-radius:10px; padding:14px; border:1px solid #2a2a3d;">
+                                <div style="font-size:11px; color:#888; margin-bottom:5px;">Telethon Forwarder</div>
+                                <div style="font-size:20px; font-weight:700; color:#fff;" id="mon-tf-status">—</div>
+                                <div style="font-size:11px; color:#666; margin-top:4px;" id="mon-tf-detail">локальный форвардер</div>
+                            </div>
+                            <div class="mon-card" id="mon-card-vp" style="background:#1a1a2e; border-radius:10px; padding:14px; border:1px solid #2a2a3d;">
+                                <div style="font-size:11px; color:#888; margin-bottom:5px;">Vietnam Parser</div>
+                                <div style="font-size:20px; font-weight:700; color:#fff;" id="mon-vp-status">—</div>
+                                <div style="font-size:11px; color:#666; margin-top:4px;" id="mon-vp-detail">опрос каналов</div>
+                            </div>
+                            <div class="mon-card" style="background:#1a1a2e; border-radius:10px; padding:14px; border:1px solid #2a2a3d;">
+                                <div style="font-size:11px; color:#888; margin-bottom:5px;">Всего объявлений</div>
+                                <div style="font-size:20px; font-weight:700; color:#d4af37;" id="mon-total-count">—</div>
+                                <div style="font-size:11px; color:#666; margin-top:4px;" id="mon-total-detail">все страны</div>
+                            </div>
+                        </div>
+
+                        <!-- Telethon группы подключений -->
+                        <div id="mon-tf-groups" style="display:none; margin-bottom:20px;">
+                            <div style="font-size:13px; font-weight:600; color:#aaa; margin-bottom:10px;">🔗 Подключения Telethon форвардера:</div>
+                            <div id="mon-tf-groups-list" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:8px;"></div>
+                        </div>
+
+                        <!-- Табы: По стране / По каналу -->
+                        <div style="display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap;">
+                            <button onclick="monSwitchTab('channels')" id="mon-tab-channels" style="padding:7px 16px; border:none; border-radius:7px; cursor:pointer; font-size:13px; font-weight:600; background:#5865f2; color:white;">📋 По каналам</button>
+                            <button onclick="monSwitchTab('hf')" id="mon-tab-hf" style="padding:7px 16px; border:none; border-radius:7px; cursor:pointer; font-size:13px; font-weight:600; background:#2a2a3d; color:#aaa;">🌐 HF источники</button>
+                            <button onclick="monSwitchTab('countries')" id="mon-tab-countries" style="padding:7px 16px; border:none; border-radius:7px; cursor:pointer; font-size:13px; font-weight:600; background:#2a2a3d; color:#aaa;">🌏 По странам</button>
+                            <input type="text" id="mon-search" placeholder="🔍 поиск по каналу..." oninput="monFilterTable()" style="margin-left:auto; padding:7px 12px; background:#1a1a2e; border:1px solid #333; border-radius:7px; color:#ddd; font-size:13px; min-width:160px;">
+                        </div>
+
+                        <!-- Таблица по каналам -->
+                        <div id="mon-tab-channels-content">
+                            <div style="overflow-x:auto;">
+                                <table id="mon-channels-table" style="width:100%; border-collapse:collapse; font-size:13px;">
+                                    <thead>
+                                        <tr style="background:#1a1a2e; color:#888;">
+                                            <th style="padding:9px 10px; text-align:left; font-weight:600; border-bottom:1px solid #2a2a3d;">#</th>
+                                            <th style="padding:9px 10px; text-align:left; font-weight:600; border-bottom:1px solid #2a2a3d;">Канал</th>
+                                            <th style="padding:9px 10px; text-align:left; font-weight:600; border-bottom:1px solid #2a2a3d;">Страны</th>
+                                            <th style="padding:9px 10px; text-align:left; font-weight:600; border-bottom:1px solid #2a2a3d;">Категория</th>
+                                            <th style="padding:9px 10px; text-align:right; font-weight:600; border-bottom:1px solid #2a2a3d;">Объявлений</th>
+                                            <th style="padding:9px 10px; text-align:left; font-weight:600; border-bottom:1px solid #2a2a3d;">Источник</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="mon-channels-tbody" style="color:#ccc;"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Таблица HF источников -->
+                        <div id="mon-tab-hf-content" style="display:none;">
+                            <div style="overflow-x:auto;">
+                                <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                                    <thead>
+                                        <tr style="background:#1a1a2e; color:#888;">
+                                            <th style="padding:9px 10px; text-align:left; border-bottom:1px solid #2a2a3d;">Группа</th>
+                                            <th style="padding:9px 10px; text-align:left; border-bottom:1px solid #2a2a3d;">Канал-источник</th>
+                                            <th style="padding:9px 10px; text-align:left; border-bottom:1px solid #2a2a3d;">Назначение</th>
+                                            <th style="padding:9px 10px; text-align:right; border-bottom:1px solid #2a2a3d;">Объявлений в базе</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="mon-hf-tbody" style="color:#ccc;"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- По странам -->
+                        <div id="mon-tab-countries-content" style="display:none;">
+                            <div id="mon-countries-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:12px;"></div>
+                        </div>
+
+                        <div id="mon-loading" style="text-align:center; color:#555; padding:30px; font-size:14px;">Нажмите "Обновить" для загрузки статистики</div>
+                    </div>
+
                     <!-- Thailand History Fetch (Telethon) -->
                     <div style="background: #fff8e1; border-radius: 12px; padding: 20px; border: 1px solid #ffe082; margin-bottom: 20px;">
                         <h3 style="margin: 0 0 5px 0; color: #e65100;">🇹🇭 Загрузка истории Тайланда (Telethon)</h3>
@@ -12029,6 +12126,229 @@
             }
         }
 
+        // ══════════════════════════════════════════
+        // МОНИТОРИНГ ПАРСЕРОВ
+        // ══════════════════════════════════════════
+        let _monData = null;
+        let _monAutoTimer = null;
+        let _monCurrentTab = 'channels';
+
+        const CATEGORY_NAMES = {
+            real_estate: 'Недвижимость', restaurants: 'Рестораны', transport: 'Транспорт',
+            entertainment: 'Развлечения', tours: 'Туры', chat: 'Чат',
+            marketplace: 'Барахолка', money_exchange: 'Обмен', kids: 'Дети',
+        };
+        const COUNTRY_FLAGS = {vietnam:'🇻🇳', thailand:'🇹🇭', india:'🇮🇳', indonesia:'🇮🇩'};
+        const HF_DEST = {THAI:'@thailandparsing', VIET:'@vietnamparsing', BIKE:'@visaranvietnam'};
+
+        function toggleMonAutoRefresh(on) {
+            clearInterval(_monAutoTimer);
+            if (on) _monAutoTimer = setInterval(loadMonitoringStats, 30000);
+        }
+
+        function monSwitchTab(tab) {
+            _monCurrentTab = tab;
+            ['channels','hf','countries'].forEach(t => {
+                const btn = document.getElementById('mon-tab-'+t);
+                const cont = document.getElementById('mon-tab-'+t+'-content');
+                if (btn) btn.style.background = t === tab ? '#5865f2' : '#2a2a3d';
+                if (btn) btn.style.color = t === tab ? 'white' : '#aaa';
+                if (cont) cont.style.display = t === tab ? 'block' : 'none';
+            });
+            if (_monData) renderMonTables(_monData);
+        }
+
+        function monFilterTable() {
+            if (_monData) renderMonTables(_monData);
+        }
+
+        async function loadMonitoringStats() {
+            const btn = document.getElementById('mon-refresh-btn');
+            const loading = document.getElementById('mon-loading');
+            if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
+            if (loading) { loading.style.display = 'block'; loading.textContent = 'Загрузка данных...'; }
+            try {
+                const r = await fetch('/api/admin/monitoring-stats');
+                const data = await r.json();
+                _monData = data;
+                renderMonCards(data);
+                renderMonTables(data);
+                const upd = document.getElementById('mon-last-update');
+                if (upd) upd.textContent = 'обновлено: ' + new Date().toLocaleTimeString('ru-RU');
+                if (loading) loading.style.display = 'none';
+            } catch(e) {
+                if (loading) { loading.style.display = 'block'; loading.textContent = 'Ошибка загрузки: ' + e.message; }
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = '↻ Обновить'; }
+            }
+        }
+
+        function statusDot(ok) {
+            return `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${ok?'#23c55e':'#ef4444'};margin-right:6px;box-shadow:0 0 6px ${ok?'#23c55e':'#ef4444'};"></span>`;
+        }
+
+        function renderMonCards(data) {
+            // HF Space
+            const hf = data.hf_space || {};
+            const hfOk = hf.ping_ok;
+            const hfCard = document.getElementById('mon-card-hf');
+            if (hfCard) hfCard.style.borderColor = hfOk ? '#23c55e44' : '#ef444444';
+            const hfSt = document.getElementById('mon-hf-status');
+            if (hfSt) hfSt.innerHTML = statusDot(hfOk) + (hfOk ? '<span style="color:#23c55e">RUNNING</span>' : '<span style="color:#ef4444">OFFLINE</span>');
+            const hfDet = document.getElementById('mon-hf-detail');
+            if (hfDet) {
+                const info = hf.info || {};
+                const grps = hf.source_channels || {};
+                const total = Object.values(grps).reduce((s,a)=>s+a.length,0);
+                hfDet.textContent = `${info.stage||'?'} · ${total} каналов-источников`;
+            }
+
+            // Telethon forwarder
+            const tf = data.telethon_forwarder || {};
+            const tfOk = tf.running === true;
+            const tfCard = document.getElementById('mon-card-tf');
+            if (tfCard) tfCard.style.borderColor = tfOk ? '#23c55e44' : '#ef444444';
+            const tfSt = document.getElementById('mon-tf-status');
+            if (tfSt) tfSt.innerHTML = statusDot(tfOk) + (tfOk ? '<span style="color:#23c55e">АКТИВЕН</span>' : '<span style="color:#ef4444">СТОП</span>');
+            const tfDet = document.getElementById('mon-tf-detail');
+            if (tfDet) {
+                const totalConn = Object.values(tf.groups||{}).reduce((s,g)=>s+(g.connected||0),0);
+                const totalFwd = tf.total_messages || 0;
+                tfDet.textContent = `${totalConn} каналов · ${totalFwd} переслано`;
+            }
+
+            // Render TF groups
+            const tfGroupsEl = document.getElementById('mon-tf-groups');
+            const tfGroupsList = document.getElementById('mon-tf-groups-list');
+            if (tfGroupsEl && tfGroupsList && tf.groups) {
+                tfGroupsEl.style.display = 'block';
+                tfGroupsList.innerHTML = Object.entries(tf.groups).map(([grp, info]) => {
+                    const pct = info.total ? Math.round(info.connected/info.total*100) : 0;
+                    const barColor = pct >= 80 ? '#23c55e' : pct >= 50 ? '#f59e0b' : '#ef4444';
+                    return `<div style="background:#12122a;border-radius:8px;padding:12px;border:1px solid #2a2a3d;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <span style="font-weight:600;color:#ddd;font-size:12px;">${grp}</span>
+                            <span style="font-size:11px;color:#888;">→ ${info.dest||''}</span>
+                        </div>
+                        <div style="background:#1a1a2e;border-radius:4px;height:6px;margin-bottom:6px;overflow:hidden;">
+                            <div style="width:${pct}%;height:100%;background:${barColor};border-radius:4px;"></div>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;font-size:11px;color:#666;">
+                            <span style="color:${barColor}">✅ ${info.connected}/${info.total}</span>
+                            <span>📤 ${info.forwarded_messages||0} сообщ</span>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+
+            // Vietnam parser
+            const vp = data.vietnamparsing || {};
+            const vpOk = vp.status === 'monitoring';
+            const vpCard = document.getElementById('mon-card-vp');
+            if (vpCard) vpCard.style.borderColor = vpOk ? '#23c55e44' : '#f59e0b44';
+            const vpSt = document.getElementById('mon-vp-status');
+            if (vpSt) vpSt.innerHTML = statusDot(vpOk || vp.running) +
+                `<span style="color:${vpOk?'#23c55e':'#f59e0b'}">${vp.status==='monitoring'?'МОНИТОРИНГ':vp.status==='fetching_initial'?'ЗАГРУЗКА':vp.status||'—'}</span>`;
+            const vpDet = document.getElementById('mon-vp-detail');
+            if (vpDet) vpDet.textContent = `новых сегодня: ${vp.new_today||0} · всего: ${vp.total_parsed||0}`;
+
+            // Total
+            const lst = data.listings || {};
+            const totals = lst.country_totals || {};
+            const grand = Object.values(totals).reduce((a,b)=>a+b,0);
+            const totalEl = document.getElementById('mon-total-count');
+            if (totalEl) totalEl.textContent = grand.toLocaleString('ru');
+            const totalDet = document.getElementById('mon-total-detail');
+            if (totalDet) totalDet.textContent = Object.entries(totals).map(([c,n])=>`${COUNTRY_FLAGS[c]||c} ${n}`).join(' · ');
+        }
+
+        function renderMonTables(data) {
+            const search = (document.getElementById('mon-search')?.value || '').toLowerCase();
+            const lst = data.listings || {};
+
+            // ── По каналам ──
+            if (_monCurrentTab === 'channels') {
+                const tbody = document.getElementById('mon-channels-tbody');
+                if (!tbody) return;
+                const channels = (lst.by_channel || []).filter(c => !search || c.channel.toLowerCase().includes(search));
+                // Build a set of HF source channels for tagging
+                const hfSrcs = new Set();
+                Object.values((data.hf_space?.source_channels)||{}).forEach(arr => arr.forEach(ch => hfSrcs.add(ch.toLowerCase())));
+                const tfSrcs = new Set();
+                Object.values((data.telethon_forwarder?.groups)||{}).forEach(g => (g.channels_ok||[]).forEach(ch => tfSrcs.add(ch.toLowerCase())));
+
+                tbody.innerHTML = channels.map((ch, i) => {
+                    const isHF = hfSrcs.has(ch.channel);
+                    const isTF = tfSrcs.has(ch.channel);
+                    const srcTags = [isHF?'<span style="background:#5865f222;color:#5865f2;border:1px solid #5865f244;border-radius:4px;padding:1px 5px;font-size:10px;">HF</span>':'', isTF?'<span style="background:#23c55e22;color:#23c55e;border:1px solid #23c55e44;border-radius:4px;padding:1px 5px;font-size:10px;">TF</span>':''].filter(Boolean).join(' ');
+                    const catName = CATEGORY_NAMES[ch.top_category] || ch.top_category || '—';
+                    const rowBg = i % 2 === 0 ? '#12122a' : '#0f0f1a';
+                    return `<tr style="background:${rowBg};">
+                        <td style="padding:7px 10px;color:#555;font-size:11px;">${i+1}</td>
+                        <td style="padding:7px 10px;"><a href="https://t.me/${ch.channel}" target="_blank" style="color:#7c9fdc;text-decoration:none;font-weight:500;">@${ch.channel}</a></td>
+                        <td style="padding:7px 10px;font-size:12px;">${ch.countries.split(',').map(c=>COUNTRY_FLAGS[c.trim()]||c).join(' ')}</td>
+                        <td style="padding:7px 10px;font-size:12px;color:#aaa;">${catName}</td>
+                        <td style="padding:7px 10px;text-align:right;font-weight:600;color:#d4af37;">${ch.total.toLocaleString('ru')}</td>
+                        <td style="padding:7px 10px;">${srcTags || '<span style="color:#444;font-size:11px;">—</span>'}</td>
+                    </tr>`;
+                }).join('') || '<tr><td colspan="6" style="padding:20px;text-align:center;color:#444;">Ничего не найдено</td></tr>';
+            }
+
+            // ── HF источники ──
+            else if (_monCurrentTab === 'hf') {
+                const tbody = document.getElementById('mon-hf-tbody');
+                if (!tbody) return;
+                const hfSrcs = (data.hf_space?.source_channels) || {};
+                const channelIdx = {};
+                (lst.by_channel || []).forEach(c => { channelIdx[c.channel] = c.total; });
+                const DEST_LABEL = {THAI:'→ @thailandparsing', VIET:'→ @vietnamparsing', BIKE:'→ @visaranvietnam'};
+                const rows = [];
+                Object.entries(hfSrcs).forEach(([grp, channels]) => {
+                    channels.filter(ch => !search || ch.toLowerCase().includes(search)).forEach(ch => {
+                        const cnt = channelIdx[ch.toLowerCase()] || 0;
+                        rows.push({grp, ch, dest: DEST_LABEL[grp]||'', cnt});
+                    });
+                });
+                tbody.innerHTML = rows.map((r, i) => {
+                    const rowBg = i % 2 === 0 ? '#12122a' : '#0f0f1a';
+                    const grpColors = {THAI:'#f59e0b', VIET:'#22c55e', BIKE:'#3b82f6'};
+                    return `<tr style="background:${rowBg};">
+                        <td style="padding:7px 10px;"><span style="background:${grpColors[r.grp]||'#555'}22;color:${grpColors[r.grp]||'#aaa'};border-radius:5px;padding:2px 8px;font-size:11px;font-weight:600;">${r.grp}</span></td>
+                        <td style="padding:7px 10px;"><a href="https://t.me/${r.ch}" target="_blank" style="color:#7c9fdc;text-decoration:none;">@${r.ch}</a></td>
+                        <td style="padding:7px 10px;color:#888;font-size:12px;">${r.dest}</td>
+                        <td style="padding:7px 10px;text-align:right;font-weight:${r.cnt>0?'600':'400'};color:${r.cnt>0?'#d4af37':'#555'};">${r.cnt > 0 ? r.cnt.toLocaleString('ru') : '—'}</td>
+                    </tr>`;
+                }).join('') || '<tr><td colspan="4" style="padding:20px;text-align:center;color:#444;">Нет данных</td></tr>';
+            }
+
+            // ── По странам ──
+            else if (_monCurrentTab === 'countries') {
+                const grid = document.getElementById('mon-countries-grid');
+                if (!grid) return;
+                const totals = lst.country_totals || {};
+                const catTotals = lst.category_totals || {};
+                grid.innerHTML = Object.entries(totals).map(([country, total]) => {
+                    return `<div style="background:#1a1a2e;border-radius:10px;padding:16px;border:1px solid #2a2a3d;">
+                        <div style="font-size:24px;margin-bottom:6px;">${COUNTRY_FLAGS[country]||country}</div>
+                        <div style="font-size:15px;font-weight:700;color:#e8e8ff;text-transform:capitalize;margin-bottom:10px;">${country}</div>
+                        <div style="font-size:26px;font-weight:800;color:#d4af37;margin-bottom:10px;">${total.toLocaleString('ru')}</div>
+                        <div style="font-size:11px;color:#666;">объявлений в базе</div>
+                    </div>`;
+                }).join('');
+                // Also add category breakdown
+                const catBlock = document.createElement('div');
+                catBlock.style.cssText = 'grid-column:1/-1;background:#1a1a2e;border-radius:10px;padding:16px;border:1px solid #2a2a3d;';
+                catBlock.innerHTML = '<div style="font-size:13px;font-weight:600;color:#888;margin-bottom:12px;">По категориям (все страны):</div><div style="display:flex;flex-wrap:wrap;gap:8px;">' +
+                    Object.entries(catTotals).sort((a,b)=>b[1]-a[1]).map(([cat,n]) =>
+                        `<div style="background:#12122a;border-radius:6px;padding:8px 12px;border:1px solid #2a2a3d;">
+                            <div style="font-size:12px;color:#aaa;">${CATEGORY_NAMES[cat]||cat}</div>
+                            <div style="font-size:16px;font-weight:700;color:#d4af37;">${n.toLocaleString('ru')}</div>
+                        </div>`
+                    ).join('') + '</div>';
+                grid.appendChild(catBlock);
+            }
+        }
+
         function adminAuth() {
             const password = adminPassword.value;
             fetch('/api/admin/auth', {
@@ -12067,7 +12387,8 @@
                     switchBannerTab('web');
                     loadChannelsAdmin();
                     loadBlacklist();
-                    renderDynamicCityButtons(); // Перерендерить города с кнопками редактирования
+                    renderDynamicCityButtons();
+                    setTimeout(loadMonitoringStats, 500);
                     // Перезагрузить текущую категорию чтобы показать кнопки перемещения
                     const currentTab = document.querySelector('.tab.active');
                     if (currentTab) {
