@@ -4752,11 +4752,28 @@ def _run_forward_100():
                 raw_text = msg.get('text', '')
                 clean = _re_clean.sub(r'<[^>]+>', '', raw_text)
                 clean = _re_clean.sub(
-                    r'[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0000FE00-\U0000FE0F'
-                    r'\U0000200D\U00002702-\U000027B0\U0001F900-\U0001F9FF'
-                    r'\U00002B50\U00002B55\U000023E9-\U000023FA\U000025AA-\U000025FE'
-                    r'\U00002934-\U00002935\U00003030\U0000303D\U00003297\U00003299]+',
-                    '', clean)
+                    '['
+                    '\U0001F000-\U0001FFFF'
+                    '\U00002600-\U000027BF'
+                    '\U0000FE00-\U0000FE0F'
+                    '\U0000200B-\U0000200D'
+                    '\U00002060\U0000FEFF'
+                    '\U000000A9\U000000AE\U00002122\U00002139'
+                    '\U00002190-\U000021FF'
+                    '\U00002300-\U000023FF'
+                    '\U00002460-\U000024FF'
+                    '\U00002500-\U000025FF'
+                    '\U00002600-\U000026FF'
+                    '\U00002700-\U000027BF'
+                    '\U00002900-\U0000297F'
+                    '\U00002B00-\U00002BFF'
+                    '\U00003000-\U0000303F'
+                    '\U00003200-\U000032FF'
+                    '\U0000E000-\U0000F8FF'
+                    '\U000E0000-\U000E007F'
+                    ']+', '', clean)
+                clean = _re_clean.sub(r'[ ]{2,}', ' ', clean)
+                clean = _re_clean.sub(r'\n{3,}', '\n\n', clean)
                 clean = clean.strip()
                 post_id = msg.get('post_id', '')
                 tg_link = f'https://t.me/{ch}/{post_id}' if post_id else ''
