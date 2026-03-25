@@ -5107,14 +5107,22 @@
 
                         <!-- Таблица HF источников -->
                         <div id="mon-tab-hf-content" style="display:none;">
+                            <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+                                <div id="mon-hf-check-summary" style="font-size:12px; color:#888;"></div>
+                                <button id="mon-hf-check-btn" onclick="checkHFChannels()" style="margin-left:auto; padding:7px 16px; background:#1565c0; color:white; border:none; border-radius:7px; cursor:pointer; font-size:12px; font-weight:600;">🔍 Проверить каналы</button>
+                            </div>
                             <div style="overflow-x:auto;">
                                 <table style="width:100%; border-collapse:collapse; font-size:13px;">
                                     <thead>
                                         <tr style="background:#1a1a2e; color:#888;">
+                                            <th style="padding:9px 10px; text-align:left; border-bottom:1px solid #2a2a3d;">Статус</th>
                                             <th style="padding:9px 10px; text-align:left; border-bottom:1px solid #2a2a3d;">Группа</th>
                                             <th style="padding:9px 10px; text-align:left; border-bottom:1px solid #2a2a3d;">Канал-источник</th>
                                             <th style="padding:9px 10px; text-align:left; border-bottom:1px solid #2a2a3d;">Назначение</th>
-                                            <th style="padding:9px 10px; text-align:right; border-bottom:1px solid #2a2a3d;">Объявлений в базе</th>
+                                            <th style="padding:9px 10px; text-align:left; border-bottom:1px solid #2a2a3d;">Посл. пост</th>
+                                            <th style="padding:9px 10px; text-align:center; border-bottom:1px solid #2a2a3d;">HTTP</th>
+                                            <th style="padding:9px 10px; text-align:center; border-bottom:1px solid #2a2a3d;">Мс</th>
+                                            <th style="padding:9px 10px; text-align:right; border-bottom:1px solid #2a2a3d;">Объявлений</th>
                                         </tr>
                                     </thead>
                                     <tbody id="mon-hf-tbody" style="color:#ccc;"></tbody>
@@ -12097,6 +12105,7 @@
         let _monData = null;
         let _monAutoTimer = null;
         let _monCurrentTab = 'channels';
+        let _hfCheckResults = {};  // { channelname_lower: {ok, status, ms, last_post} }
 
         const CATEGORY_NAMES = {
             real_estate: 'Недвижимость', restaurants: 'Рестораны', transport: 'Транспорт',
@@ -12125,6 +12134,32 @@
 
         function monFilterTable() {
             if (_monData) renderMonTables(_monData);
+        }
+
+        async function checkHFChannels() {
+            const btn = document.getElementById('mon-hf-check-btn');
+            const summary = document.getElementById('mon-hf-check-summary');
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Проверяю 68 каналов...'; }
+            if (summary) summary.textContent = 'Отправляю запросы к t.me (параллельно)...';
+            try {
+                const r = await fetch('/api/admin/hf-channels-check');
+                const data = await r.json();
+                if (!data.success) throw new Error(data.error || 'Ошибка');
+                _hfCheckResults = {};
+                (data.channels || []).forEach(c => {
+                    _hfCheckResults[c.channel.toLowerCase()] = c;
+                });
+                if (summary) {
+                    const okPct = Math.round((data.ok / data.total) * 100);
+                    const color = data.failed === 0 ? '#22c55e' : data.failed <= 5 ? '#f59e0b' : '#ef4444';
+                    summary.innerHTML = `Проверено: <b style="color:#d4af37;">${data.total}</b> | ✅ <b style="color:#22c55e;">${data.ok}</b> | ❌ <b style="color:#ef4444;">${data.failed}</b> | доступность: <b style="color:${color};">${okPct}%</b>`;
+                }
+                if (_monData) renderMonTables(_monData);
+            } catch(e) {
+                if (summary) summary.textContent = 'Ошибка: ' + e.message;
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = '🔍 Проверить каналы'; }
+            }
         }
 
         async function loadMonitoringStats() {
@@ -12267,23 +12302,42 @@
                 const channelIdx = {};
                 (lst.by_channel || []).forEach(c => { channelIdx[c.channel] = c.total; });
                 const DEST_LABEL = {THAI:'→ @thailandparsing', VIET:'→ @vietnamparsing', BIKE:'→ @visaranvietnam'};
+                const grpColors = {THAI:'#f59e0b', VIET:'#22c55e', BIKE:'#3b82f6'};
                 const rows = [];
                 Object.entries(hfSrcs).forEach(([grp, channels]) => {
                     channels.filter(ch => !search || ch.toLowerCase().includes(search)).forEach(ch => {
                         const cnt = channelIdx[ch.toLowerCase()] || 0;
-                        rows.push({grp, ch, dest: DEST_LABEL[grp]||'', cnt});
+                        const chk = _hfCheckResults[ch.toLowerCase()] || null;
+                        rows.push({grp, ch, dest: DEST_LABEL[grp]||'', cnt, chk});
                     });
                 });
                 tbody.innerHTML = rows.map((r, i) => {
                     const rowBg = i % 2 === 0 ? '#12122a' : '#0f0f1a';
-                    const grpColors = {THAI:'#f59e0b', VIET:'#22c55e', BIKE:'#3b82f6'};
+                    let statusCell = '<td style="padding:7px 10px;text-align:center;color:#444;font-size:16px;">·</td>';
+                    let httpCell = '<td style="padding:7px 10px;text-align:center;color:#444;font-size:11px;">—</td>';
+                    let msCell = '<td style="padding:7px 10px;text-align:center;color:#444;font-size:11px;">—</td>';
+                    let lastCell = '<td style="padding:7px 10px;color:#555;font-size:11px;">—</td>';
+                    if (r.chk) {
+                        const icon = r.chk.ok ? '✅' : '❌';
+                        const rowColor = r.chk.ok ? '' : 'background:#1a0808;';
+                        statusCell = `<td style="padding:7px 10px;text-align:center;font-size:15px;">${icon}</td>`;
+                        const httpColor = r.chk.status===200 ? '#22c55e' : (r.chk.status===0 ? '#ef4444' : '#f59e0b');
+                        httpCell = `<td style="padding:7px 10px;text-align:center;font-size:11px;font-weight:600;color:${httpColor};">${r.chk.status||'err'}</td>`;
+                        const msColor = r.chk.ms < 2000 ? '#22c55e' : r.chk.ms < 5000 ? '#f59e0b' : '#ef4444';
+                        msCell = `<td style="padding:7px 10px;text-align:center;font-size:11px;color:${msColor};">${r.chk.ms}</td>`;
+                        lastCell = `<td style="padding:7px 10px;font-size:11px;color:#888;">${r.chk.last_post||'—'}</td>`;
+                    }
                     return `<tr style="background:${rowBg};">
+                        ${statusCell}
                         <td style="padding:7px 10px;"><span style="background:${grpColors[r.grp]||'#555'}22;color:${grpColors[r.grp]||'#aaa'};border-radius:5px;padding:2px 8px;font-size:11px;font-weight:600;">${r.grp}</span></td>
                         <td style="padding:7px 10px;"><a href="https://t.me/${r.ch}" target="_blank" style="color:#7c9fdc;text-decoration:none;">@${r.ch}</a></td>
                         <td style="padding:7px 10px;color:#888;font-size:12px;">${r.dest}</td>
+                        ${lastCell}
+                        ${httpCell}
+                        ${msCell}
                         <td style="padding:7px 10px;text-align:right;font-weight:${r.cnt>0?'600':'400'};color:${r.cnt>0?'#d4af37':'#555'};">${r.cnt > 0 ? r.cnt.toLocaleString('ru') : '—'}</td>
                     </tr>`;
-                }).join('') || '<tr><td colspan="4" style="padding:20px;text-align:center;color:#444;">Нет данных</td></tr>';
+                }).join('') || '<tr><td colspan="8" style="padding:20px;text-align:center;color:#444;">Нет данных</td></tr>';
             }
 
             // ── По странам ──

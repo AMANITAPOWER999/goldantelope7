@@ -4172,6 +4172,105 @@ def monitoring_stats():
     })
 
 
+# ============ HF CHANNELS HEALTH CHECK ============
+
+@app.route('/api/admin/hf-channels-check', methods=['GET'])
+def hf_channels_check():
+    """Check accessibility of all HF Space source Telegram channels in parallel."""
+    import requests as _req
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import time as _time
+    import re as _re2
+
+    HF_SOURCES = {
+        'THAI': [
+            'arenda_phukets','THAILAND_REAL_ESTATE_PHUKET','housephuket','arenda_phuket_thailand',
+            'phuket_nedvizhimost_rent','phuketsk_arenda','phuket_nedvizhimost_thailand','phuketsk_for_rent',
+            'phuket_rentas','rentalsphuketonli','rentbuyphuket','Phuket_thailand05','nedvizhimost_pattaya',
+            'arenda_pattaya','pattaya_realty_estate','HappyHomePattaya','sea_bangkok','Samui_for_you',
+            'sea_phuket','realty_in_thailand','nedvig_thailand','thailand_nedvizhimost',
+            'globe_nedvizhka_Thailand',
+        ],
+        'VIET': [
+            'phuquoc_rent_wt','phyquocnedvigimost','Viet_Life_Phu_Quoc_rent','nhatrangapartment',
+            'tanrealtorgh','viet_life_niachang','nychang_arenda','rent_nha_trang','nyachang_nedvizhimost',
+            'nedvizimost_nhatrang','nhatrangforrent79','NhatrangRentl','arenda_v_nyachang','rent_appart_nha',
+            'Arenda_Nyachang_Zhilye','NhaTrang_rental','realestatebythesea_1','NhaTrang_Luxury',
+            'luckyhome_nhatrang','rentnhatrang','megasforrentnhatrang','viethome','gohomenhatrang',
+            'Vietnam_arenda','huynhtruonq','DaNangRentAFlat','danag_viet_life_rent','Danang_House',
+            'DaNangApartmentRent','danang_arenda','arenda_v_danang','HoChiMinhRentI','hcmc_arenda',
+            'RentHoChiMinh','Hanoirentapartment','HanoiRentl','Hanoi_Rent','PhuquocRentl',
+        ],
+        'BIKE': [
+            'bike_nhatrang','motohub_nhatrang','NhaTrang_moto_market','RentBikeUniq',
+            'BK_rental','nha_trang_rent','RentTwentyTwo22NhaTrang',
+        ],
+    }
+
+    HEADERS = {
+        'User-Agent': 'Mozilla/5.0 (compatible; TelegramBot/1.0)',
+        'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8',
+    }
+
+    def check_channel(grp, ch):
+        url = f'https://t.me/s/{ch}'
+        t0 = _time.time()
+        try:
+            r = _req.get(url, headers=HEADERS, timeout=8, allow_redirects=True)
+            elapsed = round((_time.time() - t0) * 1000)
+            ok = r.status_code == 200
+            msg_count = None
+            last_date = None
+            if ok:
+                html = r.text
+                # Try to extract message count
+                m = _re2.search(r'(\d[\d\s,]+)\s*(?:subscriber|member|подписч)', html, _re2.I)
+                # Try to extract last post date
+                dm = _re2.findall(r'"datePublished"\s*:\s*"([^"]+)"', html)
+                last_date = dm[-1][:10] if dm else None
+            return {
+                'group': grp,
+                'channel': ch,
+                'ok': ok,
+                'status': r.status_code,
+                'ms': elapsed,
+                'last_post': last_date,
+            }
+        except Exception as e:
+            elapsed = round((_time.time() - t0) * 1000)
+            return {
+                'group': grp,
+                'channel': ch,
+                'ok': False,
+                'status': 0,
+                'ms': elapsed,
+                'last_post': None,
+                'error': str(e)[:60],
+            }
+
+    tasks = []
+    for grp, channels in HF_SOURCES.items():
+        for ch in channels:
+            tasks.append((grp, ch))
+
+    results = []
+    with ThreadPoolExecutor(max_workers=20) as pool:
+        futures = {pool.submit(check_channel, grp, ch): (grp, ch) for grp, ch in tasks}
+        for f in as_completed(futures):
+            results.append(f.result())
+
+    results.sort(key=lambda x: (x['group'], x['channel'].lower()))
+
+    ok_count = sum(1 for r in results if r['ok'])
+    return jsonify({
+        'success': True,
+        'total': len(results),
+        'ok': ok_count,
+        'failed': len(results) - ok_count,
+        'channels': results,
+    })
+
+
 # ============ VIETNAMPARSING PARSER INTEGRATION ============
 
 @app.route('/api/admin/vietnamparsing-status', methods=['GET'])

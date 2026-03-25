@@ -13,7 +13,6 @@ DEST = {
     'VIET': 'vietnamparsing',
     'THAI': 'thailandparsing',
     'BIKE': 'visaranvietnam',
-    'FUN':  'razvlecheniyavietnam',
 }
 
 SOURCES = {
@@ -38,7 +37,6 @@ SOURCES = {
         'bike_nhatrang','motohub_nhatrang','NhaTrang_moto_market','RentBikeUniq',
         'BK_rental','nha_trang_rent','RentTwentyTwo22NhaTrang'
     ],
-    'FUN': ['MelomaniaMusicNT'],
 }
 
 STATS = {
