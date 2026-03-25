@@ -4743,9 +4743,8 @@ def _run_forward_100(only_groups=None):
                         app.logger.warning(f'[fwd100] scrape {ch}: {e}')
 
             total_scraped = len(all_msgs)
-            # Берём 100 (новейшие — ближе к началу)
-            to_send = all_msgs[:100]
-            app.logger.info(f'[fwd100] {grp}: scraped {total_scraped}, sending {len(to_send)} → @{dst_ch}')
+            to_send = all_msgs
+            app.logger.info(f'[fwd100] {grp}: scraped {total_scraped}, sending ALL → @{dst_ch}')
 
             for i, msg in enumerate(to_send, 1):
                 _FWD100_STATE['current'] = f'{grp}: {i}/{len(to_send)} → @{dst_ch}'
