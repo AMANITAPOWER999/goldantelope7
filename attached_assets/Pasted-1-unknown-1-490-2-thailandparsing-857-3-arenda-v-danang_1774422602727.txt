@@ -1,0 +1,80 @@
+1	@unknown	🇻🇳	Недвижимость	1 490	—
+2	@thailandparsing	🇹🇭	Недвижимость	857	—
+3	@arenda_v_danang	🇻🇳	Недвижимость	505	HF TF
+4	@goldantelopeasia	🇹🇭	Рестораны	350	—
+5	@restoranvietnam	🇻🇳	Рестораны	305	—
+6	@danang_arenda	🇻🇳	Недвижимость	301	HF TF
+7	@nychang_arenda	🇻🇳	Недвижимость	182	HF TF
+8	@nedvizimost_nhatrang	🇻🇳	Недвижимость	177	HF TF
+9	@rent_nha_trang	🇻🇳	Недвижимость	173	HF TF
+10	@rent_appart_nha	🇻🇳	Недвижимость	154	HF TF
+11	@nhatrang_expats	🇻🇳	Чат	135	—
+12	@nhatrang_chatik	🇻🇳	Чат	134	—
+13	@danang_forum	🇻🇳	Чат	128	—
+14	@vietnam_chatt	🇻🇳	Чат	126	—
+15	@kuinen_chat	🇻🇳	Чат	120	—
+16	@dalat_forum	🇻🇳	Чат	118	—
+17	@nedvig_thailand	🇹🇭	Недвижимость	112	HF TF
+18	@danang_expats	🇻🇳	Чат	110	—
+19	@kamran_chat	🇻🇳	Чат	104	—
+20	@hochiminh_chat	🇻🇳	Чат	103	—
+21	@vungtau_chat	🇻🇳	Чат	100	—
+22	@fukuok_chatik	🇻🇳	Чат	97	—
+23	@nhatrang_moto	🇻🇳	Чат	95	—
+24	@nedvizhimost_pattaya	🇹🇭	Недвижимость	94	HF TF
+25	@hanoi_woman	🇻🇳	Чат	90	—
+26	@hanoi_forum	🇻🇳	Чат	81	—
+27	@niachang_deti	🇻🇳	Чат	78	—
+28	@danang_woman	🇻🇳	Чат	77	—
+29	@vietnam_woman	🇻🇳	Чат	77	—
+30	@phuquoc_locals	🇻🇳	Чат	71	—
+31	@hoshiminh_woman	🇻🇳	Чат	70	—
+32	@sea_bangkok	🇹🇭	Недвижимость	70	HF TF
+33	@sea_phuket	🇹🇭	Недвижимость	70	HF TF
+34	@phanthiet_chat	🇻🇳	Чат	69	—
+35	@nyachang_nedvizhimost	🇻🇳	Недвижимость	65	HF TF
+36	@saigon_tusa	🇻🇳	Чат	65	—
+37	@vietnam_man	🇻🇳	Чат	63	—
+38	@nyachang_znakomstva	🇻🇳	Чат	60	—
+39	@hanoi_chatik	🇻🇳	Чат	59	—
+40	@halong_chat	🇻🇳	Чат	59	—
+41	@megasforrentnhatrang	🇻🇳	Недвижимость	53	HF TF
+42	@muinechat	🇻🇳	Чат	52	—
+43	@nha_trang_rent	🇻🇳	Транспорт	51	HF TF
+44	@danag_viet_life_rent	🇻🇳	Недвижимость	50	HF TF
+45	@danang_afisha	🇻🇳	Чат	49	—
+46	@danangrentaflat	🇻🇳	Недвижимость	48	HF TF
+47	@phuquoc_woman	🇻🇳	Чат	48	—
+48	@danang_chatik	🇻🇳	Чат	47	—
+49	@realty_in_thailand	🇹🇭	Недвижимость	47	HF TF
+50	@bike_nhatrang	🇻🇳	Транспорт	46	HF TF
+51	@muine_woman	🇻🇳	Чат	44	—
+52	@bk_rental	🇻🇳	Транспорт	44	HF TF
+53	@pattaya_realty_estate	🇹🇭	Недвижимость	44	HF TF
+54	@hoian_chat	🇻🇳	Чат	43	—
+55	@hoshimin_afisha	🇻🇳	Чат	42	—
+56	@phuket_rentas	🇹🇭	Недвижимость	42	HF TF
+57	@hue_chat	🇻🇳	Чат	41	—
+58	@hcmc_arenda	🇻🇳	Недвижимость	37	HF TF
+59	@danang_tysa	🇻🇳	Чат	35	—
+60	@rentbikeuniq	🇻🇳	Транспорт	34	HF TF
+61	@viet_life_niachang	🇻🇳	Недвижимость	33	HF TF
+62	@muine_afisha_chat	🇻🇳	Чат	33	—
+63	@viet_life_phu_quoc_rent	🇻🇳	Недвижимость	32	HF TF
+64	@motohub_nhatrang	🇻🇳	Транспорт	32	HF TF
+65	@danang_znakomstva	🇻🇳	Чат	30	—
+66	@arenda_v_nyachang	🇻🇳	Недвижимость	29	HF TF
+67	@nhatrangforrent79	🇻🇳	Недвижимость	28	HF TF
+68	@niachang_chat	🇻🇳	Чат	27	—
+69	@danangapartmentrent	🇻🇳	Недвижимость	23	HF TF
+70	@fukuok_tusa	🇻🇳	Чат	22	—
+71	@saigon_sport	🇻🇳	Чат	22	—
+72	@realestatebythesea_1	🇻🇳	Недвижимость	21	HF TF
+73	@goldantelope_tours	🇻🇳	Туры	20	—
+74	@viethome	🇻🇳	Недвижимость	20	HF TF
+75	@hanoirentapartment	🇻🇳	Недвижимость	19	HF TF
+76	@phyquocnedvigimost	🇻🇳	Недвижимость	19	HF TF
+77	@nhatrang_luxury	🇻🇳	Недвижимость	19	HF TF
+78	@hanoi_rent	🇻🇳	Недвижимость	16	HF TF
+79	@hochiminhrenti	🇻🇳	Недвижимость	16	HF TF
+80	@globe_nedvizhka_thailand	🇹🇭	Недвижимость	15	HF TF

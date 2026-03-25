@@ -4279,27 +4279,21 @@ def _run_fetch_empty():
     import time as _time
     _FETCH_STATE.update({'running': True, 'done': False, 'total': 0, 'current': '', 'results': {}, 'error': None})
 
-    # Все 68 HF-каналов (THAI×23 + VIET×38 + BIKE×7)
+    # Только каналы с меткой HF TF (BIKE×5 + VIET×23 + THAI×8 = 36)
     EMPTY_BIKE = [
-        'bike_nhatrang','motohub_nhatrang','NhaTrang_moto_market','RentBikeUniq',
-        'BK_rental','nha_trang_rent','RentTwentyTwo22NhaTrang',
+        'bike_nhatrang','motohub_nhatrang','nha_trang_rent','BK_rental','RentBikeUniq',
     ]
     EMPTY_VIET = [
-        'phuquoc_rent_wt','phyquocnedvigimost','Viet_Life_Phu_Quoc_rent','nhatrangapartment',
-        'tanrealtorgh','viet_life_niachang','nychang_arenda','rent_nha_trang','nyachang_nedvizhimost',
-        'nedvizimost_nhatrang','nhatrangforrent79','NhatrangRentl','arenda_v_nyachang','rent_appart_nha',
-        'Arenda_Nyachang_Zhilye','NhaTrang_rental','realestatebythesea_1','NhaTrang_Luxury',
-        'luckyhome_nhatrang','rentnhatrang','megasforrentnhatrang','viethome','gohomenhatrang',
-        'Vietnam_arenda','huynhtruonq','DaNangRentAFlat','danag_viet_life_rent','Danang_House',
-        'DaNangApartmentRent','danang_arenda','arenda_v_danang','HoChiMinhRentI','hcmc_arenda',
-        'RentHoChiMinh','Hanoirentapartment','HanoiRentl','Hanoi_Rent','PhuquocRentl',
+        'arenda_v_danang','danang_arenda','nychang_arenda','nedvizimost_nhatrang',
+        'rent_nha_trang','rent_appart_nha','nyachang_nedvizhimost','megasforrentnhatrang',
+        'danag_viet_life_rent','DaNangRentAFlat','hcmc_arenda','viet_life_niachang',
+        'Viet_Life_Phu_Quoc_rent','arenda_v_nyachang','nhatrangforrent79','DaNangApartmentRent',
+        'realestatebythesea_1','viethome','Hanoirentapartment','phyquocnedvigimost',
+        'NhaTrang_Luxury','Hanoi_Rent','HoChiMinhRentI',
     ]
     EMPTY_THAI = [
-        'arenda_phukets','THAILAND_REAL_ESTATE_PHUKET','housephuket','arenda_phuket_thailand',
-        'phuket_nedvizhimost_rent','phuketsk_arenda','phuket_nedvizhimost_thailand','phuketsk_for_rent',
-        'phuket_rentas','rentalsphuketonli','rentbuyphuket','Phuket_thailand05','nedvizhimost_pattaya',
-        'arenda_pattaya','pattaya_realty_estate','HappyHomePattaya','sea_bangkok','Samui_for_you',
-        'sea_phuket','realty_in_thailand','nedvig_thailand','thailand_nedvizhimost','globe_nedvizhka_Thailand',
+        'nedvig_thailand','nedvizhimost_pattaya','sea_bangkok','sea_phuket',
+        'realty_in_thailand','pattaya_realty_estate','phuket_rentas','globe_nedvizhka_Thailand',
     ]
 
     try:
