@@ -3958,6 +3958,54 @@ def run_bot():
     except Exception as e:
         print(f"Ошибка авторизации: {e}")
 
+# ============ GLOBALPARSING HUGGINGFACE SPACE INTEGRATION ============
+
+HF_SPACE_URL = 'https://poweramanita-globalparsing.hf.space'
+HF_API_URL = 'https://huggingface.co/api/spaces/poweramanita/globalparsing'
+
+@app.route('/api/admin/globalparsing-status', methods=['GET'])
+def globalparsing_status():
+    """Статус парсера всех групп на HuggingFace Space."""
+    try:
+        hf_token = os.environ.get('HF_TOKEN', '')
+        headers = {}
+        if hf_token:
+            headers['Authorization'] = f'Bearer {hf_token}'
+
+        # Пинг самого Space
+        ping_ok = False
+        try:
+            ping_r = requests.get(f'{HF_SPACE_URL}/', timeout=8)
+            ping_ok = ping_r.status_code == 200 and ping_r.json().get('status') == 'ok'
+        except Exception:
+            pass
+
+        # Метаданные Space через HF API
+        space_info = {}
+        try:
+            meta_r = requests.get(HF_API_URL, headers=headers, timeout=8)
+            if meta_r.status_code == 200:
+                meta = meta_r.json()
+                runtime = meta.get('runtime', {})
+                space_info = {
+                    'stage': runtime.get('stage', 'UNKNOWN'),
+                    'hardware': runtime.get('hardware', {}).get('current', 'unknown'),
+                    'replicas': runtime.get('replicas', {}).get('current', 0),
+                    'last_modified': meta.get('lastModified', ''),
+                }
+        except Exception:
+            pass
+
+        return jsonify({
+            'success': True,
+            'ping_ok': ping_ok,
+            'space_url': HF_SPACE_URL,
+            'space_info': space_info,
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 # ============ VIETNAMPARSING PARSER INTEGRATION ============
 
 @app.route('/api/admin/vietnamparsing-status', methods=['GET'])
