@@ -4279,20 +4279,27 @@ def _run_fetch_empty():
     import time as _time
     _FETCH_STATE.update({'running': True, 'done': False, 'total': 0, 'current': '', 'results': {}, 'error': None})
 
+    # Все 68 HF-каналов (THAI×23 + VIET×38 + BIKE×7)
     EMPTY_BIKE = [
         'bike_nhatrang','motohub_nhatrang','NhaTrang_moto_market','RentBikeUniq',
         'BK_rental','nha_trang_rent','RentTwentyTwo22NhaTrang',
     ]
     EMPTY_VIET = [
         'phuquoc_rent_wt','phyquocnedvigimost','Viet_Life_Phu_Quoc_rent','nhatrangapartment',
-        'NhatrangRentl','viethome','huynhtruonq',
-        'HoChiMinhRentI','RentHoChiMinh','Hanoirentapartment','HanoiRentl','Hanoi_Rent','PhuquocRentl',
+        'tanrealtorgh','viet_life_niachang','nychang_arenda','rent_nha_trang','nyachang_nedvizhimost',
+        'nedvizimost_nhatrang','nhatrangforrent79','NhatrangRentl','arenda_v_nyachang','rent_appart_nha',
+        'Arenda_Nyachang_Zhilye','NhaTrang_rental','realestatebythesea_1','NhaTrang_Luxury',
+        'luckyhome_nhatrang','rentnhatrang','megasforrentnhatrang','viethome','gohomenhatrang',
+        'Vietnam_arenda','huynhtruonq','DaNangRentAFlat','danag_viet_life_rent','Danang_House',
+        'DaNangApartmentRent','danang_arenda','arenda_v_danang','HoChiMinhRentI','hcmc_arenda',
+        'RentHoChiMinh','Hanoirentapartment','HanoiRentl','Hanoi_Rent','PhuquocRentl',
     ]
     EMPTY_THAI = [
         'arenda_phukets','THAILAND_REAL_ESTATE_PHUKET','housephuket','arenda_phuket_thailand',
-        'phuketsk_arenda','phuket_nedvizhimost_thailand','phuketsk_for_rent',
-        'rentalsphuketonli','rentbuyphuket','Phuket_thailand05','arenda_pattaya',
-        'HappyHomePattaya','Samui_for_you',
+        'phuket_nedvizhimost_rent','phuketsk_arenda','phuket_nedvizhimost_thailand','phuketsk_for_rent',
+        'phuket_rentas','rentalsphuketonli','rentbuyphuket','Phuket_thailand05','nedvizhimost_pattaya',
+        'arenda_pattaya','pattaya_realty_estate','HappyHomePattaya','sea_bangkok','Samui_for_you',
+        'sea_phuket','realty_in_thailand','nedvig_thailand','thailand_nedvizhimost','globe_nedvizhka_Thailand',
     ]
 
     try:
