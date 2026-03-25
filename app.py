@@ -4547,16 +4547,17 @@ _FWD100_STATE = {
 }
 
 
-def _run_forward_100():
+def _run_forward_100(only_groups=None):
     """Скачивает последние 100 постов с каждого источника, отправляет фото+текст в каналы-назначения."""
     import time as _time, requests as _req
 
+    init_results = {}
+    for g in (only_groups or ['BIKE', 'VIET', 'THAI']):
+        init_results[g] = {'sent': 0, 'failed': 0}
     _FWD100_STATE.update({
         'running': True, 'done': False,
         'sent': 0, 'failed': 0, 'current': '',
-        'results': {'BIKE': {'sent': 0, 'failed': 0},
-                    'VIET': {'sent': 0, 'failed': 0},
-                    'THAI': {'sent': 0, 'failed': 0}},
+        'results': init_results,
         'error': None,
     })
 
@@ -4715,7 +4716,8 @@ def _run_forward_100():
         return False
 
     try:
-        for grp in ('BIKE', 'VIET', 'THAI'):
+        groups_to_run = only_groups or ['BIKE', 'VIET', 'THAI']
+        for grp in groups_to_run:
             dst_ch = DST[grp]
             channels = M[grp]
             sent = 0
@@ -4828,9 +4830,11 @@ def _run_forward_100():
 def forward_100():
     if _FWD100_STATE['running']:
         return jsonify({'success': False, 'error': 'Уже запущено'})
+    groups = request.json.get('groups') if request.is_json else None
     import threading
-    threading.Thread(target=_run_forward_100, daemon=True).start()
-    return jsonify({'success': True, 'message': 'Запущен форвард 100/группу — /api/admin/forward-100-status'})
+    threading.Thread(target=_run_forward_100, args=(groups,), daemon=True).start()
+    label = ','.join(groups) if groups else 'ALL'
+    return jsonify({'success': True, 'message': f'Запущен форвард [{label}] — /api/admin/forward-100-status'})
 
 
 @app.route('/api/admin/forward-100-status', methods=['GET'])
