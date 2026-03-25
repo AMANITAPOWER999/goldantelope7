@@ -4277,20 +4277,27 @@ def _run_fetch_empty():
     import time as _time
     _FETCH_STATE.update({'running': True, 'done': False, 'total': 0, 'current': '', 'results': {}, 'error': None})
 
-    # Только каналы с 0 объявлений — парсим последние 100 постов
+    # Все HF-каналы (68): THAI×23 / VIET×38 / BIKE×7
     EMPTY_BIKE = [
-        'NhaTrang_moto_market','RentTwentyTwo22NhaTrang',
+        'bike_nhatrang','motohub_nhatrang','NhaTrang_moto_market','RentBikeUniq',
+        'BK_rental','nha_trang_rent','RentTwentyTwo22NhaTrang',
     ]
     EMPTY_VIET = [
-        'phuquoc_rent_wt','nhatrangapartment','tanrealtorgh','NhatrangRentl',
-        'NhaTrang_rental','luckyhome_nhatrang','gohomenhatrang','Vietnam_arenda',
-        'huynhtruonq','HoChiMinhRentI','RentHoChiMinh','HanoiRentl','Hanoi_Rent','PhuquocRentl',
+        'phuquoc_rent_wt','phyquocnedvigimost','Viet_Life_Phu_Quoc_rent','nhatrangapartment',
+        'tanrealtorgh','viet_life_niachang','nychang_arenda','rent_nha_trang','nyachang_nedvizhimost',
+        'nedvizimost_nhatrang','nhatrangforrent79','NhatrangRentl','arenda_v_nyachang','rent_appart_nha',
+        'Arenda_Nyachang_Zhilye','NhaTrang_rental','realestatebythesea_1','NhaTrang_Luxury',
+        'luckyhome_nhatrang','rentnhatrang','megasforrentnhatrang','viethome','gohomenhatrang',
+        'Vietnam_arenda','huynhtruonq','DaNangRentAFlat','danag_viet_life_rent','Danang_House',
+        'DaNangApartmentRent','danang_arenda','arenda_v_danang','HoChiMinhRentI','hcmc_arenda',
+        'RentHoChiMinh','Hanoirentapartment','HanoiRentl','Hanoi_Rent','PhuquocRentl',
     ]
     EMPTY_THAI = [
         'arenda_phukets','THAILAND_REAL_ESTATE_PHUKET','housephuket','arenda_phuket_thailand',
         'phuket_nedvizhimost_rent','phuketsk_arenda','phuket_nedvizhimost_thailand','phuketsk_for_rent',
-        'rentalsphuketonli','rentbuyphuket','Phuket_thailand05','arenda_pattaya',
-        'HappyHomePattaya','Samui_for_you','thailand_nedvizhimost','globe_nedvizhka_Thailand',
+        'phuket_rentas','rentalsphuketonli','rentbuyphuket','Phuket_thailand05','nedvizhimost_pattaya',
+        'arenda_pattaya','pattaya_realty_estate','HappyHomePattaya','sea_bangkok','Samui_for_you',
+        'sea_phuket','realty_in_thailand','nedvig_thailand','thailand_nedvizhimost','globe_nedvizhka_Thailand',
     ]
 
     try:
@@ -4344,34 +4351,31 @@ def _run_fetch_empty():
         photo_url = photos[0] if photos else (item.get('image_url') or '')
 
         try:
-            if photo_url:
-                r = _req.post(
-                    f'https://api.telegram.org/bot{bot_token}/sendPhoto',
-                    json={'chat_id': chat_id, 'photo': photo_url,
-                          'caption': caption, 'parse_mode': 'HTML'},
-                    timeout=15)
-                if not r.ok:
-                    err = r.json().get('description', r.text)
-                    app.logger.warning(f'[forward] sendPhoto @{dst}: {err} — retry as text')
+            # Отправляем только текст + ссылку на оригинал (фото t.me/s/ недоступны Bot API)
+            r = _req.post(
+                f'https://api.telegram.org/bot{bot_token}/sendMessage',
+                json={'chat_id': chat_id, 'text': caption,
+                      'parse_mode': 'HTML', 'disable_web_page_preview': True},
+                timeout=10)
+            if not r.ok:
+                rj = r.json()
+                desc = rj.get('description', '')
+                if r.status_code == 429:
+                    wait = rj.get('parameters', {}).get('retry_after', 30)
+                    app.logger.warning(f'[forward] rate limit @{dst}: retry after {wait}s')
+                    _time.sleep(wait + 1)
+                    # повтор после паузы
                     r2 = _req.post(
                         f'https://api.telegram.org/bot{bot_token}/sendMessage',
                         json={'chat_id': chat_id, 'text': caption,
-                              'parse_mode': 'HTML', 'disable_web_page_preview': False},
-                        timeout=15)
+                              'parse_mode': 'HTML', 'disable_web_page_preview': True},
+                        timeout=10)
                     if not r2.ok:
-                        app.logger.warning(f'[forward] sendMessage @{dst}: {r2.json().get("description")}')
+                        app.logger.warning(f'[forward] retry failed @{dst}: {r2.json().get("description")}')
                 else:
-                    app.logger.debug(f'[forward] ✅ sendPhoto @{dst}')
+                    app.logger.warning(f'[forward] sendMessage @{dst}: {desc}')
             else:
-                r = _req.post(
-                    f'https://api.telegram.org/bot{bot_token}/sendMessage',
-                    json={'chat_id': chat_id, 'text': caption,
-                          'parse_mode': 'HTML', 'disable_web_page_preview': False},
-                    timeout=15)
-                if not r.ok:
-                    app.logger.warning(f'[forward] sendMessage @{dst}: {r.json().get("description")}')
-                else:
-                    app.logger.debug(f'[forward] ✅ sendMessage @{dst}')
+                app.logger.debug(f'[forward] ✅ @{dst}: {caption[:60]}')
         except Exception as _e:
             app.logger.warning(f'[forward] {grp}→{dst}: {_e}')
 
@@ -4517,7 +4521,7 @@ def _run_fetch_empty():
                     _post_to_channel(grp, item)
                 except Exception as _fe:
                     app.logger.warning(f'[forward] ошибка: {_fe}')
-                _time.sleep(0.5)  # 2 msg/сек — безопасный темп для Bot API
+                _time.sleep(3)  # ~20 msg/мин — лимит Telegram для каналов
 
         try:
             _file_path_cache.clear()
