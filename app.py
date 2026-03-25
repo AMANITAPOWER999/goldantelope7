@@ -4075,19 +4075,25 @@ def monitoring_stats():
     # ── 4. HF Space source channels (from globalparsing) ──
     HF_SOURCES = {
         'THAI': [
-            'nedvig_thailand','nedvizhimost_pattaya','sea_bangkok','sea_phuket',
-            'realty_in_thailand','pattaya_realty_estate','phuket_rentas',
+            'arenda_phukets','THAILAND_REAL_ESTATE_PHUKET','housephuket','arenda_phuket_thailand',
+            'phuket_nedvizhimost_rent','phuketsk_arenda','phuket_nedvizhimost_thailand','phuketsk_for_rent',
+            'phuket_rentas','rentalsphuketonli','rentbuyphuket','Phuket_thailand05','nedvizhimost_pattaya',
+            'arenda_pattaya','pattaya_realty_estate','HappyHomePattaya','sea_bangkok','Samui_for_you',
+            'sea_phuket','realty_in_thailand','nedvig_thailand','thailand_nedvizhimost','globe_nedvizhka_Thailand',
         ],
         'VIET': [
-            'arenda_v_danang','danang_arenda','nychang_arenda','nedvizimost_nhatrang',
-            'rent_nha_trang','rent_appart_nha','danag_viet_life_rent','nyachang_nedvizhimost',
-            'DaNangRentAFlat','megasforrentnhatrang','viet_life_niachang','realestatebythesea_1',
-            'hcmc_arenda','Viet_Life_Phu_Quoc_rent','arenda_v_nyachang','nhatrangforrent79',
-            'Arenda_Nyachang_Zhilye','Danang_House','DaNangApartmentRent','rentnhatrang',
-            'viethome','Hanoirentapartment','phyquocnedvigimost','NhaTrang_Luxury',
+            'phuquoc_rent_wt','phyquocnedvigimost','Viet_Life_Phu_Quoc_rent','nhatrangapartment',
+            'tanrealtorgh','viet_life_niachang','nychang_arenda','rent_nha_trang','nyachang_nedvizhimost',
+            'nedvizimost_nhatrang','nhatrangforrent79','NhatrangRentl','arenda_v_nyachang','rent_appart_nha',
+            'Arenda_Nyachang_Zhilye','NhaTrang_rental','realestatebythesea_1','NhaTrang_Luxury',
+            'luckyhome_nhatrang','rentnhatrang','megasforrentnhatrang','viethome','gohomenhatrang',
+            'Vietnam_arenda','huynhtruonq','DaNangRentAFlat','danag_viet_life_rent','Danang_House',
+            'DaNangApartmentRent','danang_arenda','arenda_v_danang','HoChiMinhRentI','hcmc_arenda',
+            'RentHoChiMinh','Hanoirentapartment','HanoiRentl','Hanoi_Rent','PhuquocRentl',
         ],
         'BIKE': [
-            'bike_nhatrang','motohub_nhatrang','nha_trang_rent','BK_rental','RentBikeUniq',
+            'bike_nhatrang','motohub_nhatrang','NhaTrang_moto_market','RentBikeUniq',
+            'BK_rental','nha_trang_rent','RentTwentyTwo22NhaTrang',
         ],
     }
 
@@ -4177,19 +4183,25 @@ def hf_channels_check():
 
     HF_SOURCES = {
         'THAI': [
-            'nedvig_thailand','nedvizhimost_pattaya','sea_bangkok','sea_phuket',
-            'realty_in_thailand','pattaya_realty_estate','phuket_rentas',
+            'arenda_phukets','THAILAND_REAL_ESTATE_PHUKET','housephuket','arenda_phuket_thailand',
+            'phuket_nedvizhimost_rent','phuketsk_arenda','phuket_nedvizhimost_thailand','phuketsk_for_rent',
+            'phuket_rentas','rentalsphuketonli','rentbuyphuket','Phuket_thailand05','nedvizhimost_pattaya',
+            'arenda_pattaya','pattaya_realty_estate','HappyHomePattaya','sea_bangkok','Samui_for_you',
+            'sea_phuket','realty_in_thailand','nedvig_thailand','thailand_nedvizhimost','globe_nedvizhka_Thailand',
         ],
         'VIET': [
-            'arenda_v_danang','danang_arenda','nychang_arenda','nedvizimost_nhatrang',
-            'rent_nha_trang','rent_appart_nha','danag_viet_life_rent','nyachang_nedvizhimost',
-            'DaNangRentAFlat','megasforrentnhatrang','viet_life_niachang','realestatebythesea_1',
-            'hcmc_arenda','Viet_Life_Phu_Quoc_rent','arenda_v_nyachang','nhatrangforrent79',
-            'Arenda_Nyachang_Zhilye','Danang_House','DaNangApartmentRent','rentnhatrang',
-            'viethome','Hanoirentapartment','phyquocnedvigimost','NhaTrang_Luxury',
+            'phuquoc_rent_wt','phyquocnedvigimost','Viet_Life_Phu_Quoc_rent','nhatrangapartment',
+            'tanrealtorgh','viet_life_niachang','nychang_arenda','rent_nha_trang','nyachang_nedvizhimost',
+            'nedvizimost_nhatrang','nhatrangforrent79','NhatrangRentl','arenda_v_nyachang','rent_appart_nha',
+            'Arenda_Nyachang_Zhilye','NhaTrang_rental','realestatebythesea_1','NhaTrang_Luxury',
+            'luckyhome_nhatrang','rentnhatrang','megasforrentnhatrang','viethome','gohomenhatrang',
+            'Vietnam_arenda','huynhtruonq','DaNangRentAFlat','danag_viet_life_rent','Danang_House',
+            'DaNangApartmentRent','danang_arenda','arenda_v_danang','HoChiMinhRentI','hcmc_arenda',
+            'RentHoChiMinh','Hanoirentapartment','HanoiRentl','Hanoi_Rent','PhuquocRentl',
         ],
         'BIKE': [
-            'bike_nhatrang','motohub_nhatrang','nha_trang_rent','BK_rental','RentBikeUniq',
+            'bike_nhatrang','motohub_nhatrang','NhaTrang_moto_market','RentBikeUniq',
+            'BK_rental','nha_trang_rent','RentTwentyTwo22NhaTrang',
         ],
     }
 
