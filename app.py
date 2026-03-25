@@ -382,7 +382,7 @@ def telegram_webhook():
         
         if chat_id and text:
             if text == '/start':
-                webapp_url = f"https://{os.environ.get('REPLIT_DEV_DOMAIN', 'dea72e19-5d41-40be-9b77-95eb5ddef5a0-00-8g466fi5xkhi.spock.replit.dev')}"
+                webapp_url = f"https://{os.environ.get('REPLIT_DEV_DOMAIN', '')}"
                 keyboard = {
                     "inline_keyboard": [
                         [{"text": "🚀 Открыть мини приложение", "web_app": {"url": webapp_url}}],
